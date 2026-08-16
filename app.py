@@ -50,7 +50,18 @@ st.markdown("""
 @st.cache_resource
 def conectar_banco():
     escopos = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-    credenciais = Credentials.from_service_account_file("credenciais.json", scopes=escopos)
+    
+    # 1. Tenta ler do Cofre da Nuvem (Streamlit Secrets)
+    if "gcp_service_account" in st.secrets:
+        credenciais = Credentials.from_service_account_info(
+            dict(st.secrets["gcp_service_account"]), scopes=escopos
+        )
+    # 2. Se não estiver no Secrets, tenta ler o arquivo local do computador
+    else:
+        credenciais = Credentials.from_service_account_file(
+            "credenciais.json", scopes=escopos
+        )
+        
     cliente = gspread.authorize(credenciais)
     return cliente.open("BD_Aplicativo_Vendas")
 
