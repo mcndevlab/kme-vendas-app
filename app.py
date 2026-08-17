@@ -208,6 +208,55 @@ def padronizar_telefone(tel):
         return f"({num[:2]}) {num[2:6]}-{num[6:]}"
     return tel 
 
+# --- MOTOR DE PARSER PARA O ESPELHO DO CRM ---
+def extrair_tabela_crm_itens(itens_str):
+    dados_tabela = []
+    if not itens_str or itens_str == 'nan': return dados_tabela
+    
+    elementos = str(itens_str).split(";")
+    for elem in elementos:
+        elem = elem.strip()
+        if not elem: continue
+        
+        cod = "-"
+        qtd = 1
+        nome = elem
+        v_u = 0.0
+        
+        # Padrão Novo Rico: 2x CENTRAL SMART [Cód: 5101001242] (R$ 150,00)
+        if "[Cód:" in elem:
+            try:
+                parte_qtd_nome, rest = elem.split("[Cód:", 1)
+                cod_str, rest2 = rest.split("]", 1)
+                cod = cod_str.strip()
+                
+                if "x " in parte_qtd_nome:
+                    qtd_str, nome = parte_qtd_nome.split("x ", 1)
+                    qtd = int(qtd_str.strip())
+                else: nome = parte_qtd_nome.strip()
+                
+                if "(R$" in rest2:
+                    val_str = rest2.split("(R$", 1)[1].replace(")", "").strip()
+                    v_u = converter_para_numero(val_str)
+            except:
+                pass
+        # Padrão Legado: 2x CENTRAL SMART
+        elif "x " in elem:
+            try:
+                qtd_str, nome = elem.split("x ", 1)
+                qtd = int(qtd_str.strip())
+            except: pass
+            
+        subtotal = v_u * qtd
+        dados_tabela.append({
+            "Código KME": cod,
+            "Produto / Serviço": nome,
+            "Qtd": qtd,
+            "Valor Unit.": f"R$ {v_u:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".") if v_u > 0 else "-",
+            "Subtotal": f"R$ {subtotal:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".") if subtotal > 0 else "-"
+        })
+    return dados_tabela
+
 # --- MOTOR DE VALIDAÇÃO DE REGRAS TÉCNICAS ---
 def validar_inconsistencias_carrinho(carrinho, df_regras):
     avisos = []
@@ -268,7 +317,13 @@ def salvar_proposta(nome_cliente, nome_proposta, vendedor, email, total_mrr, tot
     try:
         aba = conectar_banco().worksheet("Propostas")
         agora = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        resumo_itens = "; ".join([f"{item['quantidade']}x {item['nome']}" for item in itens])
+        
+        # Formatação Rica com Código, Qtd e Preço para o Espelho do CRM
+        resumo_itens = "; ".join([
+            f"{item['quantidade']}x {item['nome']} [Cód: {item.get('codigo', '-')}] (R$ {item.get('preco_calculado', item.get('preco_venda', 0)):,.2f})"
+            for item in itens
+        ])
+        
         nova_linha = [agora, nome_cliente, vendedor, email, f"R$ {total_mrr:,.2f}".replace(",", "_").replace(".", ",").replace("_", "."), f"R$ {total_setup:,.2f}".replace(",", "_").replace(".", ",").replace("_", "."), forma_pag, f"{parcelas}x", val_parcela, resumo_itens, f"{desc_p:.1f}%", f"{desc_a:.1f}%", f"{desc_i:.1f}%", "Em Negociação", "", "", nome_proposta]
         aba.append_row(nova_linha)
         return True
@@ -280,7 +335,12 @@ def atualizar_proposta_modificada(row_index, nome_proposta, total_mrr, total_set
     try:
         aba = conectar_banco().worksheet("Propostas")
         agora = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        resumo_itens = "; ".join([f"{item['quantidade']}x {item['nome']}" for item in itens])
+        
+        resumo_itens = "; ".join([
+            f"{item['quantidade']}x {item['nome']} [Cód: {item.get('codigo', '-')}] (R$ {item.get('preco_calculado', item.get('preco_venda', 0)):,.2f})"
+            for item in itens
+        ])
+        
         valores = [[
             f"R$ {total_mrr:,.2f}".replace(",", "_").replace(".", ",").replace("_", "."),
             f"R$ {total_setup:,.2f}".replace(",", "_").replace(".", ",").replace("_", "."),
@@ -309,17 +369,20 @@ def calcular_novos_valores_proposta(row_data, df_produtos, df_valor_sensor):
     desc_i = converter_para_numero(row_data.get('Desc_Imagem', '0')) / 100
     
     bruto_prod, bruto_alarme, bruto_imagem, mao_obra = 0.0, 0.0, 0.0, 0.0
-    
     itens_parsed = []
     qtd_abertura, qtd_ivp = 0, 0
     
     for item in itens_str.split(";"):
         if "x " in item:
-            qtd_str, nome_item = item.strip().split("x ", 1)
-            try: qtd = int(qtd_str)
-            except: qtd = 0
+            try:
+                qtd_str, parte_resto = item.strip().split("x ", 1)
+                qtd = int(qtd_str)
+                nome_item = parte_resto.split("[Cód:")[0].strip() if "[Cód:" in parte_resto else parte_resto.strip()
+            except:
+                qtd = 0
+                nome_item = ""
             
-            prod_info = df_produtos[df_produtos['Nome_Item'].astype(str).str.strip() == nome_item.strip()]
+            prod_info = df_produtos[df_produtos['Nome_Item'].astype(str).str.strip() == nome_item]
             if not prod_info.empty:
                 prod = prod_info.iloc[0]
                 tipo_sensor = str(prod.get('Tipo_Sensor', '')).strip().upper()
@@ -385,11 +448,15 @@ def carregar_proposta_para_simulador(idx_planilha, dados_prop, df_produtos, df_l
     
     for item in itens_str.split(";"):
         if "x " in item:
-            qtd_str, nome_item = item.strip().split("x ", 1)
-            try: qtd = int(qtd_str)
-            except: qtd = 0
+            try:
+                qtd_str, parte_resto = item.strip().split("x ", 1)
+                qtd = int(qtd_str)
+                nome_item = parte_resto.split("[Cód:")[0].strip() if "[Cód:" in parte_resto else parte_resto.strip()
+            except:
+                qtd = 0
+                nome_item = ""
             
-            prod_info = df_produtos[df_produtos['Nome_Item'].astype(str).str.strip() == nome_item.strip()]
+            prod_info = df_produtos[df_produtos['Nome_Item'].astype(str).str.strip() == nome_item]
             if not prod_info.empty:
                 prod = prod_info.iloc[0]
                 novo_carrinho.append({
@@ -627,18 +694,6 @@ def tela_principal():
             # VISÃO 1: TABELA ANALÍTICA (DESKTOP)
             if "Tabela" in modo_prop:
                 st.write("---")
-                h1, h_ult, h2, h_np, h3, h4, h5, h6, h7 = st.columns([2, 2, 3, 3, 2, 2, 2, 2, 2])
-                with h1: st.markdown("**Data**")
-                with h_ult: st.markdown("**Últ. Prop**")
-                with h2: st.markdown("**Cliente**")
-                with h_np: st.markdown("**Ref. Proposta**")
-                with h3: st.markdown("**Status**")
-                with h4: st.markdown("**Restante**")
-                with h5: st.markdown("**Serviços**")
-                with h6: st.markdown("**Setup**")
-                with h7: st.markdown("**Ação**")
-                st.write("---")
-                
                 for idx, row in df_prop.iterrows():
                     linha_real_planilha = row.name + 2 
                     data_p = str(row.get('Data_Proposta', '')).split(" ")[0]
@@ -680,6 +735,13 @@ def tela_principal():
                                 st.session_state["renovar_proposta_idx"] = linha_real_planilha
                                 st.session_state["renovar_proposta_dados"] = row.to_dict()
                                 st.rerun()
+                    
+                    # ESPELHO DO CRM
+                    itens_crm = extrair_tabela_crm_itens(row.get('Itens_Orcamento', ''))
+                    if itens_crm:
+                        with st.expander(f"📋 Ver Itens Detalhados para Lançamento no CRM — Proposta '{nome_prop}'"):
+                            st.dataframe(itens_crm, use_container_width=True, hide_index=True)
+                    st.divider()
 
             # VISÃO 2: CARTÕES (CELULAR)
             else:
@@ -712,6 +774,14 @@ def tela_principal():
                             **Serviços (Mensal):** {mrr} | **Setup:** {setup}
                         """, unsafe_allow_html=True)
                         
+                        # ESPELHO DO CRM
+                        itens_crm = extrair_tabela_crm_itens(row.get('Itens_Orcamento', ''))
+                        if itens_crm:
+                            st.write("---")
+                            st.markdown("📋 **Itens do Projeto para CRM:**")
+                            st.dataframe(itens_crm, use_container_width=True, hide_index=True)
+                        
+                        st.write("")
                         if status == "Em Negociação":
                             if st.button("🔄 Renovar / Editar Proposta", key=f"ren_tab_{linha_real_planilha}", type="primary", use_container_width=True):
                                 st.session_state["renovar_proposta_idx"] = linha_real_planilha
