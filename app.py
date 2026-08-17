@@ -13,6 +13,9 @@ from geopy.geocoders import Nominatim
 # ==========================================
 st.set_page_config(page_title="Khronos Sales", page_icon="🛡️", layout="wide")
 
+# DEFINE AQUI A SUA SENHA PADRÃO DE PRIMEIRO ACESSO
+SENHA_PADRAO_SISTEMA = "Khronos@2026"
+
 st.markdown("""
     <style>
     div[data-testid="stVerticalBlock"] { gap: 0.3rem !important; }
@@ -283,6 +286,30 @@ def validar_inconsistencias_carrinho(carrinho, df_regras):
     return avisos
 
 # --- FUNÇÕES DE GRAVAÇÃO E ATUALIZAÇÃO ---
+def atualizar_senha_banco(email_usuario, nova_senha):
+    try:
+        aba = conectar_banco().worksheet("Usuarios")
+        cabecalho = aba.row_values(1)
+        
+        if "Email" not in cabecalho or "Senha" not in cabecalho:
+            st.error("Erro: Colunas 'Email' ou 'Senha' não encontradas na planilha Usuarios.")
+            return False
+            
+        col_email = cabecalho.index("Email") + 1
+        col_senha = cabecalho.index("Senha") + 1
+        
+        emails_cadastrados = aba.col_values(col_email)
+        
+        for i, email_planilha in enumerate(emails_cadastrados):
+            if email_planilha.strip().lower() == email_usuario.strip().lower():
+                aba.update_cell(i + 1, col_senha, nova_senha)
+                return True
+                
+        return False
+    except Exception as err:
+        st.error(f"❌ Erro ao atualizar senha no banco: {err}")
+        return False
+
 def salvar_lead(ld, vendedor, email):
     try:
         aba = conectar_banco().worksheet("Funil_Vendas")
@@ -505,10 +532,10 @@ def carregar_proposta_para_simulador(idx_planilha, dados_prop, df_produtos, df_l
 # 3. MEMÓRIA
 # ==========================================
 if "autenticado" not in st.session_state:
-    st.session_state.update({"autenticado": False, "nome_usuario": "", "email_usuario": "", "carrinho": [], "desc_prod": 0.0, "desc_alarme": 0.0, "desc_imagem": 0.0, "etapa_atual": "lead", "lead_dados": {}, "lead_salvo": False, "msg_sucesso": "", "renovar_proposta_idx": None, "renovar_proposta_dados": {}, "proposta_idx_editando": None, "editando_lead_idx": None, "nome_proposta_atual": "", "ultimo_gps_capturado": "", "item_aberto": None, "unidade_mo_selecionada": None, "modo_visao_leads": "📱 Cartões (Celular)", "modo_visao_propostas": "📱 Cartões (Celular)"})
+    st.session_state.update({"autenticado": False, "nome_usuario": "", "email_usuario": "", "carrinho": [], "desc_prod": 0.0, "desc_alarme": 0.0, "desc_imagem": 0.0, "etapa_atual": "lead", "lead_dados": {}, "lead_salvo": False, "msg_sucesso": "", "renovar_proposta_idx": None, "renovar_proposta_dados": {}, "proposta_idx_editando": None, "editando_lead_idx": None, "nome_proposta_atual": "", "ultimo_gps_capturado": "", "item_aberto": None, "unidade_mo_selecionada": None, "modo_visao_leads": "📱 Cartões (Celular)", "modo_visao_propostas": "📱 Cartões (Celular)", "precisa_trocar_senha": False})
 
 # ==========================================
-# 4. TELA DE LOGIN E MAESTRO
+# 4. TELA DE LOGIN, TROCA DE SENHA E MAESTRO
 # ==========================================
 def tela_login():
     exibir_topo_com_logo("Khronos Sales", "Acesso ao Portal Comercial de Vendas")
@@ -526,10 +553,46 @@ def tela_login():
                 df_us['Email_C'] = df_us['Email'].astype(str).str.strip().str.lower()
                 df_us['Senha_C'] = df_us['Senha'].astype(str).str.strip()
                 match = df_us[(df_us['Email_C'] == email_input) & (df_us['Senha_C'] == senha_input)]
+                
                 if not match.empty:
-                    st.session_state.update({"autenticado": True, "nome_usuario": str(match.iloc[0].get('Nome', '')), "email_usuario": email_input})
+                    # VERIFICA SE ESTÁ USANDO A SENHA PADRÃO PARA EXIGIR TROCA
+                    senha_no_banco = str(match.iloc[0].get('Senha', '')).strip()
+                    precisa_trocar = (senha_no_banco == SENHA_PADRAO_SISTEMA)
+                    
+                    st.session_state.update({
+                        "autenticado": True, 
+                        "nome_usuario": str(match.iloc[0].get('Nome', '')), 
+                        "email_usuario": email_input,
+                        "precisa_trocar_senha": precisa_trocar
+                    })
                     st.rerun()
                 else: st.error("❌ E-mail ou senha incorretos.")
+
+def tela_trocar_senha():
+    exibir_topo_com_logo("Khronos Sales", "Atualização Obrigatória de Senha")
+    st.write("---")
+    
+    st.warning("🔒 **Ação Necessária:** Detectamos que você está usando a senha provisória de acesso. Para garantir a segurança da sua conta, por favor, defina uma nova senha.")
+    
+    with st.form("form_trocar_senha"):
+        nova_senha = st.text_input("Nova Senha", type="password")
+        confirma_senha = st.text_input("Confirme a Nova Senha", type="password")
+        
+        if st.form_submit_button("Salvar Nova Senha e Continuar", type="primary"):
+            if len(nova_senha) < 6:
+                st.error("A sua nova senha deve ter pelo menos 6 caracteres.")
+            elif nova_senha != confirma_senha:
+                st.error("As senhas digitadas não coincidem. Tente novamente.")
+            elif nova_senha == SENHA_PADRAO_SISTEMA:
+                st.error("Você não pode utilizar a mesma senha padrão. Escolha uma senha diferente.")
+            else:
+                if atualizar_senha_banco(st.session_state["email_usuario"], nova_senha):
+                    st.success("✅ Senha atualizada com sucesso! Acessando o sistema...")
+                    st.session_state["precisa_trocar_senha"] = False
+                    st.cache_data.clear() # Limpa o cache para carregar com a senha nova no próximo login
+                    st.rerun()
+                else:
+                    st.error("Erro ao salvar a nova senha. Tente novamente.")
 
 def tela_principal():
     df_produtos = carregar_produtos()
@@ -1302,7 +1365,11 @@ def tela_principal():
         except Exception as e: st.error(f"❌ Erro na conexão: {e}")
 
 # ==========================================
-# 6. INICIALIZAÇÃO
+# 6. INICIALIZAÇÃO E FLUXO DE TELAS
 # ==========================================
-if not st.session_state["autenticado"]: tela_login()
-else: tela_principal()
+if not st.session_state.get("autenticado", False): 
+    tela_login()
+elif st.session_state.get("precisa_trocar_senha", False):
+    tela_trocar_senha()
+else: 
+    tela_principal()
