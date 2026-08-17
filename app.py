@@ -152,23 +152,17 @@ def carregar_todos_leads():
         return df
     except: return pd.DataFrame()
 
-# CORREÇÃO DEFINITIVA: Leitura robusta forçando cabeçalhos da Temperatura (Colunas R e S)
 @st.cache_data(ttl=300)
 def carregar_todas_propostas():
     try:
         dados = conectar_banco().worksheet("Propostas").get_all_values()
         if len(dados) > 1:
             cabecalho = dados[0]
-            # Blinda o sistema caso as colunas R e S não tenham nome na planilha
-            while len(cabecalho) < 19:
-                cabecalho.append(f"Coluna_{len(cabecalho)+1}")
-            
+            while len(cabecalho) < 19: cabecalho.append(f"Coluna_{len(cabecalho)+1}")
             cabecalho[17] = "Temperatura"
             cabecalho[18] = "Data_Temperatura_Renovada"
-            
             df = pd.DataFrame(dados[1:], columns=cabecalho)
             df.columns = df.columns.astype(str).str.strip()
-            
             if 'Email_Vendedor' in df.columns:
                 df['Email_Vendedor'] = df['Email_Vendedor'].astype(str).str.strip().str.lower()
             return df
@@ -415,25 +409,32 @@ def aplicar_filtros_gerenciais(df_users, df_all_leads, df_all_prop, perfil, minh
     elif perfil == "Gerente_Condominio": df_users = df_users[df_users['Vertical'].astype(str).str.strip().str.lower().str.contains('condominio')]
     
     st.write("---")
-    c1, c2, c3, c4, c5 = st.columns(5)
+    
+    num_cols = 4 
+    if perfil == "Diretoria": num_cols = 6
+    elif "Gerente" in perfil: num_cols = 5
+    
+    cols = st.columns(num_cols)
+    idx = 0
     
     filtro_vert = "Todas"
     if perfil == "Diretoria":
         opcoes_vert = ["Todas"] + sorted(df_users['Vertical'].dropna().unique().tolist())
-        filtro_vert = c1.selectbox("Vertical", opcoes_vert)
+        filtro_vert = cols[idx].selectbox("Vertical", opcoes_vert)
         if filtro_vert != "Todas": df_users = df_users[df_users['Vertical'] == filtro_vert]
+        idx += 1
             
     filtro_unid = "Todas"
     if perfil in ["Diretoria", "Gerente_Varejo", "Gerente_Condominio"]:
         opcoes_unid = ["Todas"] + sorted(df_users['Unidade'].dropna().unique().tolist())
-        col_t = c2 if perfil == "Diretoria" else c1
-        filtro_unid = col_t.selectbox("Unidade", opcoes_unid)
+        filtro_unid = cols[idx].selectbox("Unidade", opcoes_unid)
         if filtro_unid != "Todas": df_users = df_users[df_users['Unidade'] == filtro_unid]
+        idx += 1
             
     opcoes_vend = ["Todos"] + sorted(df_users['Nome'].dropna().unique().tolist())
-    col_t_v = c3 if perfil == "Diretoria" else (c2 if perfil in ["Gerente_Varejo", "Gerente_Condominio"] else c1)
-    filtro_vend = col_t_v.selectbox("Vendedor", opcoes_vend)
+    filtro_vend = cols[idx].selectbox("Vendedor", opcoes_vend)
     if filtro_vend != "Todos": df_users = df_users[df_users['Nome'] == filtro_vend]
+    idx += 1
     
     valid_em = df_users['Email_C'].tolist()
     df_eq_l = df_all_leads[df_all_leads['Email_Vendedor'].isin(valid_em)] if not df_all_leads.empty else pd.DataFrame()
@@ -455,11 +456,11 @@ def aplicar_filtros_gerenciais(df_users, df_all_leads, df_all_prop, perfil, minh
     if 'Sem Data' in meses_d: meses_d.remove('Sem Data')
     meses_d = ["Todos"] + meses_d
     
-    col_t_m = c4 if perfil == "Diretoria" else (c3 if perfil in ["Gerente_Varejo", "Gerente_Condominio"] else c2)
-    filtro_mes = col_t_m.selectbox("Mês", meses_d)
+    filtro_mes = cols[idx].selectbox("Mês", meses_d)
     if filtro_mes != "Todos":
         if not df_eq_l.empty: df_eq_l = df_eq_l[df_eq_l['Mes_Ano'] == filtro_mes]
         if not df_eq_p.empty: df_eq_p = df_eq_p[df_eq_p['Mes_Ano'] == filtro_mes]
+    idx += 1
         
     dias_d = []
     if not df_eq_l.empty: dias_d.extend(df_eq_l['Dia_Str'].dropna().unique().tolist())
@@ -468,12 +469,22 @@ def aplicar_filtros_gerenciais(df_users, df_all_leads, df_all_prop, perfil, minh
     if 'Sem Data' in dias_d: dias_d.remove('Sem Data')
     dias_d = ["Todos"] + dias_d
     
-    col_t_d = c5 if perfil == "Diretoria" else (c4 if perfil in ["Gerente_Varejo", "Gerente_Condominio"] else c3)
-    filtro_dia = col_t_d.selectbox("Dia", dias_d)
+    filtro_dia = cols[idx].selectbox("Dia", dias_d)
     if filtro_dia != "Todos":
         if not df_eq_l.empty: df_eq_l = df_eq_l[df_eq_l['Dia_Str'] == filtro_dia]
         if not df_eq_p.empty: df_eq_p = df_eq_p[df_eq_p['Dia_Str'] == filtro_dia]
-        
+    idx += 1
+    
+    temp_d = []
+    if not df_eq_p.empty and 'Temperatura' in df_eq_p.columns:
+        temp_d.extend([str(t).strip() for t in df_eq_p['Temperatura'].dropna().unique().tolist() if str(t).strip() != ''])
+    temp_d = sorted(list(set(temp_d)))
+    temp_d = ["Todas"] + temp_d
+    
+    filtro_temp = cols[idx].selectbox("Temp. Proposta", temp_d)
+    if filtro_temp != "Todas" and not df_eq_p.empty:
+        df_eq_p = df_eq_p[df_eq_p['Temperatura'].astype(str).str.strip() == filtro_temp]
+
     mapa_v = dict(zip(df_users['Email_C'], df_users['Nome']))
     return df_eq_l, df_eq_p, mapa_v
 
