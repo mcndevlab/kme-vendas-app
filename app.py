@@ -5,6 +5,7 @@ from google.oauth2.service_account import Credentials
 import datetime
 import re
 import os
+import pydeck as pdk
 from streamlit_geolocation import streamlit_geolocation
 from geopy.geocoders import Nominatim
 
@@ -584,7 +585,7 @@ def tela_principal():
         st.session_state.update({"carrinho": [], "desc_prod": 0.0, "desc_alarme": 0.0, "desc_imagem": 0.0, "item_aberto": None, "gatilho_limpar_carrinho": False})
     if st.session_state["msg_sucesso"] != "": st.success(st.session_state["msg_sucesso"]); st.session_state["msg_sucesso"] = ""
 
-    # --- TELA: LOCALIZAÇÃO DA EQUIPE (MAPA) ---
+    # --- TELA: LOCALIZAÇÃO DA EQUIPE (MAPA AVANÇADO) ---
     if st.session_state["etapa_atual"] == "mapa_equipe":
         st.header("🗺️ Localização da Equipe")
         df_users = carregar_usuarios()
@@ -601,8 +602,42 @@ def tela_principal():
             df_mapa = df_mapa.dropna(subset=['lat', 'lon'])
             
             if not df_mapa.empty:
-                st.map(df_mapa[['lat', 'lon']], zoom=10)
-                st.caption(f"📍 Mostrando a localização exata de **{len(df_mapa)} lead(s)** com base nos filtros aplicados acima.")
+                # LÓGICA DE AGRUPAMENTO DE COORDENADAS E NOMES (RESOLVENDO SOBREPOSIÇÃO)
+                df_mapa['Nome_Exibicao'] = df_mapa['Nome_Razao'].astype(str).fillna('Cliente Desconhecido')
+                df_agrupado = df_mapa.groupby(['lat', 'lon']).agg(
+                    Qtd=('Nome_Exibicao', 'count'),
+                    Nomes=('Nome_Exibicao', lambda x: ' | '.join(list(x)))
+                ).reset_index()
+                
+                # Se for 1 = Azul Normal. Se for > 1 = Vermelho Maior.
+                df_agrupado['cor_rgba'] = df_agrupado['Qtd'].apply(lambda x: [0, 102, 204, 200] if x == 1 else [227, 6, 19, 200])
+                df_agrupado['raio_tamanho'] = df_agrupado['Qtd'].apply(lambda x: 150 if x == 1 else 250 + (x * 50))
+                
+                camada_deck = pdk.Layer(
+                    "ScatterplotLayer",
+                    data=df_agrupado,
+                    get_position='[lon, lat]',
+                    get_color='cor_rgba',
+                    get_radius='raio_tamanho',
+                    pickable=True
+                )
+                
+                visao_inicial = pdk.ViewState(
+                    latitude=df_agrupado['lat'].mean(),
+                    longitude=df_agrupado['lon'].mean(),
+                    zoom=10,
+                    pitch=0
+                )
+                
+                # Renderizar Mapa 3D Interativo com Tooltip
+                st.pydeck_chart(pdk.Deck(
+                    map_style='mapbox://styles/mapbox/light-v10',
+                    initial_view_state=visao_inicial,
+                    layers=[camada_deck],
+                    tooltip={"html": "<b>{Qtd} Lead(s) neste local:</b><br/>{Nomes}", "style": {"backgroundColor": "#1e293b", "color": "white"}}
+                ))
+                
+                st.caption(f"📍 Mostrando a localização exata de **{len(df_mapa)} lead(s)**. 🔴 Pontos vermelhos maiores indicam múltiplos clientes na mesma coordenada. Passe o mouse em cima para ver os nomes.")
             else: st.info("Nenhuma localização de GPS válida encontrada com os filtros selecionados.")
         else: st.info("Nenhum lead com localização registrada encontrado para esta seleção.")
 
