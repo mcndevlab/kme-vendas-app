@@ -564,7 +564,8 @@ def tela_principal():
         if st.button("📋 Meus Leads", use_container_width=True): st.session_state.update({"etapa_atual": "meus_leads", "proposta_idx_editando": None}); st.rerun()
         if st.button("💼 Minhas Propostas", use_container_width=True): st.session_state.update({"etapa_atual": "minhas_propostas", "proposta_idx_editando": None}); st.rerun()
             
-        if st.session_state.get('perfil_usuario', 'Consultor') != 'Consultor':
+        perfil_acesso = str(st.session_state.get('perfil_usuario', '')).strip()
+        if perfil_acesso in ["Lider", "Gerente_Varejo", "Gerente_Condominio", "Diretoria"]:
             st.divider()
             st.caption("🔒 **Área Gerencial**")
             if st.button("📊 Funil da Equipe", use_container_width=True): st.session_state.update({"etapa_atual": "funil_equipe", "proposta_idx_editando": None}); st.rerun()
