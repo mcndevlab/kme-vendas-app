@@ -602,14 +602,12 @@ def tela_principal():
             df_mapa = df_mapa.dropna(subset=['lat', 'lon'])
             
             if not df_mapa.empty:
-                # LÓGICA DE AGRUPAMENTO DE COORDENADAS E NOMES (RESOLVENDO SOBREPOSIÇÃO)
                 df_mapa['Nome_Exibicao'] = df_mapa['Nome_Razao'].astype(str).fillna('Cliente Desconhecido')
                 df_agrupado = df_mapa.groupby(['lat', 'lon']).agg(
                     Qtd=('Nome_Exibicao', 'count'),
                     Nomes=('Nome_Exibicao', lambda x: ' | '.join(list(x)))
                 ).reset_index()
                 
-                # Se for 1 = Azul Normal. Se for > 1 = Vermelho Maior.
                 df_agrupado['cor_rgba'] = df_agrupado['Qtd'].apply(lambda x: [0, 102, 204, 200] if x == 1 else [227, 6, 19, 200])
                 df_agrupado['raio_tamanho'] = df_agrupado['Qtd'].apply(lambda x: 150 if x == 1 else 250 + (x * 50))
                 
@@ -629,9 +627,9 @@ def tela_principal():
                     pitch=0
                 )
                 
-                # Renderizar Mapa 3D Interativo com Tooltip
+                # AQUI FOI ALTERADO O MAP_STYLE PARA NONE (DEIXA O STREAMLIT ASSUMIR O MAPA BASE GRATUITO)
                 st.pydeck_chart(pdk.Deck(
-                    map_style='mapbox://styles/mapbox/light-v10',
+                    map_style=None,
                     initial_view_state=visao_inicial,
                     layers=[camada_deck],
                     tooltip={"html": "<b>{Qtd} Lead(s) neste local:</b><br/>{Nomes}", "style": {"backgroundColor": "#1e293b", "color": "white"}}
