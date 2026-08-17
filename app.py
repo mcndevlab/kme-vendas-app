@@ -10,7 +10,7 @@ from geopy.geocoders import Nominatim
 # ==========================================
 # 1. CONFIGURAÇÃO DA PÁGINA E CSS
 # ==========================================
-st.set_page_config(page_title="KME Vendas", page_icon="🚀", layout="wide")
+st.set_page_config(page_title="Khronos Sales", page_icon="🛡️", layout="wide")
 
 st.markdown("""
     <style>
@@ -42,7 +42,6 @@ st.markdown("""
         justify-content: center !important;
     }
     
-    /* Estilização para Cards Responsivos */
     .card-mobile {
         background-color: #f8fafc;
         border-left: 4px solid #0066cc;
@@ -52,6 +51,9 @@ st.markdown("""
     }
     </style>
 """, unsafe_allow_html=True)
+
+# URL da logo oficial do escudo Khronos
+LOGO_KHRONOS_URL = "https://grupokhronos.com.br/wp-content/uploads/2021/04/khronos-logo.png"
 
 # ==========================================
 # 2. CONEXÃO E LEITURA DO GOOGLE SHEETS
@@ -436,7 +438,11 @@ if "autenticado" not in st.session_state:
 # 4. TELA DE LOGIN E MAESTRO
 # ==========================================
 def tela_login():
-    st.title("🔐 Acesso ao Sistema KME")
+    st.image(LOGO_KHRONOS_URL, width=160)
+    st.title("🛡️ Khronos Sales")
+    st.caption("Acesso ao Portal Comercial de Vendas")
+    st.write("---")
+    
     with st.form("form_login"):
         email_input = st.text_input("E-mail corporativo").strip().lower()
         senha_input = st.text_input("Senha", type="password").strip()
@@ -535,7 +541,8 @@ def tela_principal():
     # MENU E FLUXO NORMAL
     # ==========================================
     with st.sidebar:
-        st.title("🏢 KME Vendas")
+        st.image(LOGO_KHRONOS_URL, width=140)
+        st.markdown("### **Khronos Sales**")
         st.write(f"👤 **{st.session_state['nome_usuario']}**")
         st.divider()
         if st.button("➕ Novo Lead", use_container_width=True): 
@@ -568,7 +575,7 @@ def tela_principal():
     if st.session_state["msg_sucesso"] != "":
         st.success(st.session_state["msg_sucesso"]); st.session_state["msg_sucesso"] = ""
 
-    # --- TELA: MINHAS PROPOSTAS (DESIGN RESPONSIVO POR CARDS) ---
+    # --- TELA: MINHAS PROPOSTAS ---
     if st.session_state["etapa_atual"] == "minhas_propostas":
         st.header("💼 Minhas Propostas Enviadas")
         
@@ -628,7 +635,6 @@ def tela_principal():
                 
                 cor_status = "🟢" if status == "Em Negociação" else ("🔴" if status == "Perdida" else "⚫")
                 
-                # Card Responsivo para Mobile e Desktop
                 with st.expander(f"{cor_status} {cliente} — {nome_prop} ({data_p})"):
                     st.markdown(f"""
                         **Status:** {status} | **Validade:** {tempo_faltante}<br>
@@ -641,7 +647,7 @@ def tela_principal():
                             st.session_state["renovar_proposta_dados"] = row.to_dict()
                             st.rerun()
 
-    # --- TELA: MEUS LEADS (DESIGN RESPONSIVO POR CARDS) ---
+    # --- TELA: MEUS LEADS ---
     elif st.session_state["etapa_atual"] == "meus_leads":
         st.header("📋 Meus Leads")
         df_leads = carregar_meus_leads(st.session_state["email_usuario"])
@@ -675,7 +681,6 @@ def tela_principal():
                 email_cli = str(row.get("Email_Cliente", "")).replace('nan', '').strip() or "-"
                 contato_cli = str(row.get("Contato", "")).replace('nan', '').strip() or "-"
 
-                # Card do Lead Responsivo
                 with st.expander(f"👤 {nome} ({status_lead})"):
                     st.markdown(f"""
                         📞 <b>Telefone:</b> {telefone}<br>
