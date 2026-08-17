@@ -128,7 +128,7 @@ def carregar_configuracoes():
                 config_dict[param] = val_num
             return config_dict
     except: pass
-    return {"Taxa_Juros_Mensal": 0.022, "Max_Parcelas_Sem_Juros": 3, "Max_Parcelas_Boleto": 18, "Max_Parcelas_Cartao": 24, "Desc_Max_Produtos": 15.0, "Desc_Max_Alarme": 15.0, "Desc_Max_Imagem": 30.0}
+    return {"Taxa_Juros_Mensal": 0.022, "Max_Parcelas_Sem_Juros": 3, "Max_Parcelas_Boleto": 18, "Max_Parcelas_Cartao": 24, "Desc_Max_Produtos": 15.0, "Desc_Max_Alarme": 15.0, "Desc_Max_Imagem": 30.0, "Venc_Proposta": 10.0}
 
 @st.cache_data(ttl=300)
 def carregar_usuarios():
@@ -500,6 +500,8 @@ def tela_trocar_senha():
                 else: st.error("Erro ao salvar a nova senha. Tente novamente.")
 
 def tela_principal():
+    cfg = carregar_configuracoes()
+    limite_vencimento = int(cfg.get("Venc_Proposta", 10))
     df_produtos = carregar_produtos()
     df_valor_sensor = carregar_valores_sensores()
     df_valor_ponto = carregar_valores_ponto_mo()
@@ -517,11 +519,11 @@ def tela_principal():
             try:
                 data_ref = datetime.datetime.strptime(data_ref_str, "%d/%m/%Y %H:%M:%S") if " " in data_ref_str else datetime.datetime.strptime(data_ref_str, "%d/%m/%Y")
                 dias_passados = (hoje - data_ref).days
-                if dias_passados >= 10: propostas_vencidas.append({"idx_planilha": idx + 2, "dados": row, "dias": dias_passados})
+                if dias_passados >= limite_vencimento: propostas_vencidas.append({"idx_planilha": idx + 2, "dados": row, "dias": dias_passados})
             except: pass
 
     if len(propostas_vencidas) > 0 and not st.session_state.get("proposta_idx_editando"):
-        st.error(f"🚨 **AÇÃO EXIGIDA:** Você possui {len(propostas_vencidas)} proposta(s) parada(s) há 10 dias ou mais!")
+        st.error(f"🚨 **AÇÃO EXIGIDA:** Você possui {len(propostas_vencidas)} proposta(s) parada(s) há {limite_vencimento} dias ou mais!")
         st.warning("O sistema foi bloqueado temporariamente. Informe o andamento da negociação abaixo para liberar o uso.")
         st.write("---")
         for p in propostas_vencidas:
@@ -529,7 +531,7 @@ def tela_principal():
                 st.markdown(f"### 💼 Cliente: {p['dados'].get('Nome_Cliente', '')} *(Ref: {p['dados'].get('Nome_Proposta', '')})*")
                 st.caption(f"Vencida há {p['dias']} dias.")
                 c1, c2 = st.columns(2)
-                acao = c1.selectbox("O que aconteceu com esta negociação?", ["Selecione...", "Renovar por mais 10 dias", "Perda na negociação"], key=f"acao_{p['idx_planilha']}")
+                acao = c1.selectbox("O que aconteceu com esta negociação?", ["Selecione...", f"Renovar por mais {limite_vencimento} dias", "Perda na negociação"], key=f"acao_{p['idx_planilha']}")
                 motivo = c2.selectbox("Motivo da Perda:", ["Selecione...", "Perdeu Interesse", "Valor Alto", "Fechou com Concorrente", "Tecnologia não atende", "Sem retorno do Cliente"], key=f"mot_{p['idx_planilha']}") if acao == "Perda na negociação" else ""
                 
                 if acao != "Selecione...":
@@ -537,7 +539,7 @@ def tela_principal():
                         if motivo == "Selecione...": st.info("⚠️ Selecione o motivo da perda para confirmar.")
                         elif st.button("Confirmar Perda", type="primary", key=f"btn_{p['idx_planilha']}"):
                             if efetivar_perda(p['idx_planilha'], motivo): st.toast(f"Proposta atualizada para Perdida."); st.cache_data.clear(); st.rerun()
-                    elif acao == "Renovar por mais 10 dias":
+                    elif acao == f"Renovar por mais {limite_vencimento} dias":
                         mrr_n, setup_n = calcular_novos_valores_proposta(p['dados'], df_produtos, df_valor_sensor)
                         mrr_a, setup_a = p['dados'].get('Total_MRR', ''), p['dados'].get('Total_Setup', '')
                         pode_salvar = True
@@ -627,7 +629,6 @@ def tela_principal():
                     pitch=0
                 )
                 
-                # AQUI FOI ALTERADO O MAP_STYLE PARA NONE (DEIXA O STREAMLIT ASSUMIR O MAPA BASE GRATUITO)
                 st.pydeck_chart(pdk.Deck(
                     map_style=None,
                     initial_view_state=visao_inicial,
@@ -712,7 +713,7 @@ def tela_principal():
                     if status == "Em Negociação" and data_ref_str:
                         try:
                             d_ref = datetime.datetime.strptime(data_ref_str, "%d/%m/%Y %H:%M:%S") if " " in data_ref_str else datetime.datetime.strptime(data_ref_str, "%d/%m/%Y")
-                            faltam = 10 - (hoje - d_ref).days
+                            faltam = limite_vencimento - (hoje - d_ref).days
                             if faltam > 0: tempo_faltante = f"{faltam} dia(s)"
                             elif faltam == 0: tempo_faltante = "Vence hoje"
                             else: tempo_faltante = "Vencida"
@@ -743,7 +744,7 @@ def tela_principal():
 
         if st.session_state.get("renovar_proposta_idx"):
             idx_planilha, dados_prop = st.session_state["renovar_proposta_idx"], st.session_state["renovar_proposta_dados"]
-            st.info(f"🔄 **Renovando proposta de:** {dados_prop.get('Nome_Cliente')} (por mais 10 dias)")
+            st.info(f"🔄 **Renovando proposta de:** {dados_prop.get('Nome_Cliente')} (por mais {limite_vencimento} dias)")
             mrr_n, setup_n = calcular_novos_valores_proposta(dados_prop, df_produtos, df_valor_sensor)
             mrr_a, setup_a = dados_prop.get('Total_MRR', ''), dados_prop.get('Total_Setup', '')
             
@@ -790,7 +791,7 @@ def tela_principal():
                     if status == "Em Negociação" and data_ref_str:
                         try:
                             d_ref = datetime.datetime.strptime(data_ref_str, "%d/%m/%Y %H:%M:%S") if " " in data_ref_str else datetime.datetime.strptime(data_ref_str, "%d/%m/%Y")
-                            faltam = 10 - (hoje - d_ref).days
+                            faltam = limite_vencimento - (hoje - d_ref).days
                             if faltam > 0: tempo_faltante = f"{faltam} dia(s)"
                             elif faltam == 0: tempo_faltante = "Vence hoje"
                             else: tempo_faltante = "Vencida"
@@ -822,7 +823,7 @@ def tela_principal():
                     if status == "Em Negociação" and data_ref_str:
                         try:
                             d_ref = datetime.datetime.strptime(data_ref_str, "%d/%m/%Y %H:%M:%S") if " " in data_ref_str else datetime.datetime.strptime(data_ref_str, "%d/%m/%Y")
-                            faltam = 10 - (hoje - d_ref).days
+                            faltam = limite_vencimento - (hoje - d_ref).days
                             if faltam > 0: tempo_faltante = f"{faltam} dia(s)"
                             elif faltam == 0: tempo_faltante = "Vence hoje"
                             else: tempo_faltante = "Vencida"
