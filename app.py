@@ -880,7 +880,7 @@ def tela_principal():
         idx_editando_lead = st.session_state.get("editando_lead_idx")
         st.title("👤 Atualizar Dados do Lead" if idx_editando_lead else "👤 1. Cadastro de Novo Lead")
         
-        st.write("📍 **Auditoria de Visita (Localização)**")
+        st.write("📍 **Preencher Localização**")
         st.caption("Clique no botão abaixo para registrar sua coordenada atual.")
         
         loc = streamlit_geolocation()
