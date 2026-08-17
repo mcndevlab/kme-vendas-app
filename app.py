@@ -4,6 +4,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 import datetime
 import re
+import os
 from streamlit_geolocation import streamlit_geolocation
 from geopy.geocoders import Nominatim
 
@@ -51,6 +52,18 @@ st.markdown("""
     }
     </style>
 """, unsafe_allow_html=True)
+
+# Função para exibir a Logo e o Título lado a lado
+def exibir_topo_com_logo(titulo="Khronos Sales", subtitulo="Acesso ao Portal Comercial de Vendas"):
+    c_logo, c_txt = st.columns([1, 8])
+    with c_logo:
+        if os.path.exists("logo.jpg"):
+            st.image("logo.jpg", width=65)
+        else:
+            st.write("🛡️")
+    with c_txt:
+        st.markdown(f"<h1 style='margin:0; padding:0; line-height: 1.1;'>{titulo}</h1>", unsafe_allow_html=True)
+        st.caption(subtitulo)
 
 # ==========================================
 # 2. CONEXÃO E LEITURA DO GOOGLE SHEETS
@@ -435,8 +448,7 @@ if "autenticado" not in st.session_state:
 # 4. TELA DE LOGIN E MAESTRO
 # ==========================================
 def tela_login():
-    st.title("🛡️ Khronos Sales")
-    st.caption("Acesso ao Portal Comercial de Vendas")
+    exibir_topo_com_logo("Khronos Sales", "Acesso ao Portal Comercial de Vendas")
     st.write("---")
     
     with st.form("form_login"):
@@ -537,7 +549,9 @@ def tela_principal():
     # MENU E FLUXO NORMAL
     # ==========================================
     with st.sidebar:
-        st.title("🛡️ Khronos Sales")
+        if os.path.exists("logo.jpg"):
+            st.image("logo.jpg", width=120)
+        st.markdown("### **Khronos Sales**")
         st.write(f"👤 **{st.session_state['nome_usuario']}**")
         st.divider()
         if st.button("➕ Novo Lead", use_container_width=True): 
@@ -647,7 +661,7 @@ def tela_principal():
         st.header("📋 Meus Leads")
         df_leads = carregar_meus_leads(st.session_state["email_usuario"])
         
-        if df_leads.empty: st.info("Nenhum lead encontrado no seu funil.")
+        if df_leads.empty: st.info("Nenum lead encontrado no seu funil.")
         else:
             df_leads.columns = df_leads.columns.astype(str).str.strip()
             df_prop.columns = df_prop.columns.astype(str).str.strip() if not df_prop.empty else []
