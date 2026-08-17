@@ -223,7 +223,6 @@ def extrair_tabela_crm_itens(itens_str):
         nome = elem
         v_u = 0.0
         
-        # Padrão Novo Rico: 2x CENTRAL SMART [Cód: 5101001242] (R$ 150,00)
         if "[Cód:" in elem:
             try:
                 parte_qtd_nome, rest = elem.split("[Cód:", 1)
@@ -238,9 +237,7 @@ def extrair_tabela_crm_itens(itens_str):
                 if "(R$" in rest2:
                     val_str = rest2.split("(R$", 1)[1].replace(")", "").strip()
                     v_u = converter_para_numero(val_str)
-            except:
-                pass
-        # Padrão Legado: 2x CENTRAL SMART
+            except: pass
         elif "x " in elem:
             try:
                 qtd_str, nome = elem.split("x ", 1)
@@ -318,7 +315,6 @@ def salvar_proposta(nome_cliente, nome_proposta, vendedor, email, total_mrr, tot
         aba = conectar_banco().worksheet("Propostas")
         agora = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         
-        # Formatação Rica com Código, Qtd e Preço para o Espelho do CRM
         resumo_itens = "; ".join([
             f"{item['quantidade']}x {item['nome']} [Cód: {item.get('codigo', '-')}] (R$ {item.get('preco_calculado', item.get('preco_venda', 0)):,.2f})"
             for item in itens
@@ -691,9 +687,21 @@ def tela_principal():
             df_prop = df_prop.iloc[::-1] 
             hoje = datetime.datetime.now()
             
-            # VISÃO 1: TABELA ANALÍTICA (DESKTOP)
+            # VISÃO 1: TABELA ANALÍTICA COMPACTA (DESKTOP)
             if "Tabela" in modo_prop:
                 st.write("---")
+                h1, h_ult, h2, h_np, h3, h4, h5, h6, h7 = st.columns([2, 2, 4, 3, 2, 2, 2, 2, 2])
+                with h1: st.markdown("**Data**")
+                with h_ult: st.markdown("**Últ. Prop**")
+                with h2: st.markdown("**👤 Cliente (Clique para ver o CRM)**")
+                with h_np: st.markdown("**Ref. Proposta**")
+                with h3: st.markdown("**Status**")
+                with h4: st.markdown("**Restante**")
+                with h5: st.markdown("**Serviços**")
+                with h6: st.markdown("**Setup**")
+                with h7: st.markdown("**Ação**")
+                st.write("---")
+                
                 for idx, row in df_prop.iterrows():
                     linha_real_planilha = row.name + 2 
                     data_p = str(row.get('Data_Proposta', '')).split(" ")[0]
@@ -720,10 +728,18 @@ def tela_principal():
                     
                     cor_status = "🟢 " if status == "Em Negociação" else ("🔴 " if status == "Perdida" else "⚫ ")
                     
-                    c1, c_ult, c2, c_np, c3, c4, c5, c6, c7 = st.columns([2, 2, 3, 3, 2, 2, 2, 2, 2])
+                    c1, c_ult, c2, c_np, c3, c4, c5, c6, c7 = st.columns([2, 2, 4, 3, 2, 2, 2, 2, 2])
                     with c1: st.write(data_p)
                     with c_ult: st.write(data_ult_prop)
-                    with c2: st.write(cliente)
+                    with c2: 
+                        # EXPANDER INTEGRADO NA LINHA DO CLIENTE
+                        with st.expander(f"👤 {cliente}"):
+                            itens_crm = extrair_tabela_crm_itens(row.get('Itens_Orcamento', ''))
+                            if itens_crm:
+                                st.markdown(f"📋 **Itens do Projeto ({nome_prop}) para CRM:**")
+                                st.dataframe(itens_crm, use_container_width=True, hide_index=True)
+                            else: st.info("Itens legados em formato simples.")
+                            
                     with c_np: st.write(nome_prop)
                     with c3: st.write(f"{cor_status}{status}")
                     with c4: st.write(tempo_faltante)
@@ -735,13 +751,6 @@ def tela_principal():
                                 st.session_state["renovar_proposta_idx"] = linha_real_planilha
                                 st.session_state["renovar_proposta_dados"] = row.to_dict()
                                 st.rerun()
-                    
-                    # ESPELHO DO CRM
-                    itens_crm = extrair_tabela_crm_itens(row.get('Itens_Orcamento', ''))
-                    if itens_crm:
-                        with st.expander(f"📋 Ver Itens Detalhados para Lançamento no CRM — Proposta '{nome_prop}'"):
-                            st.dataframe(itens_crm, use_container_width=True, hide_index=True)
-                    st.divider()
 
             # VISÃO 2: CARTÕES (CELULAR)
             else:
@@ -774,7 +783,6 @@ def tela_principal():
                             **Serviços (Mensal):** {mrr} | **Setup:** {setup}
                         """, unsafe_allow_html=True)
                         
-                        # ESPELHO DO CRM
                         itens_crm = extrair_tabela_crm_itens(row.get('Itens_Orcamento', ''))
                         if itens_crm:
                             st.write("---")
