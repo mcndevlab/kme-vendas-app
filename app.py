@@ -442,7 +442,7 @@ def carregar_proposta_para_simulador(idx_planilha, dados_prop, df_produtos, df_l
 # 3. MEMÓRIA
 # ==========================================
 if "autenticado" not in st.session_state:
-    st.session_state.update({"autenticado": False, "nome_usuario": "", "email_usuario": "", "carrinho": [], "desc_prod": 0.0, "desc_alarme": 0.0, "desc_imagem": 0.0, "etapa_atual": "lead", "lead_dados": {}, "lead_salvo": False, "msg_sucesso": "", "renovar_proposta_idx": None, "renovar_proposta_dados": {}, "proposta_idx_editando": None, "editando_lead_idx": None, "nome_proposta_atual": "", "ultimo_gps_capturado": "", "item_aberto": None, "unidade_mo_selecionada": None})
+    st.session_state.update({"autenticado": False, "nome_usuario": "", "email_usuario": "", "carrinho": [], "desc_prod": 0.0, "desc_alarme": 0.0, "desc_imagem": 0.0, "etapa_atual": "lead", "lead_dados": {}, "lead_salvo": False, "msg_sucesso": "", "renovar_proposta_idx": None, "renovar_proposta_dados": {}, "proposta_idx_editando": None, "editando_lead_idx": None, "nome_proposta_atual": "", "ultimo_gps_capturado": "", "item_aberto": None, "unidade_mo_selecionada": None, "modo_visao_leads": "📱 Cartões (Celular)", "modo_visao_propostas": "📱 Cartões (Celular)"})
 
 # ==========================================
 # 4. TELA DE LOGIN E MAESTRO
@@ -588,6 +588,10 @@ def tela_principal():
     if st.session_state["etapa_atual"] == "minhas_propostas":
         st.header("💼 Minhas Propostas Enviadas")
         
+        c_tit, c_modo = st.columns([7, 3])
+        with c_modo:
+            modo_prop = st.radio("Modo de Exibição:", ["📱 Cartões (Celular)", "🖥️ Tabela Analítica"], key="modo_visao_propostas", horizontal=True)
+
         if st.session_state.get("renovar_proposta_idx"):
             idx_planilha = st.session_state["renovar_proposta_idx"]
             dados_prop = st.session_state["renovar_proposta_dados"]
@@ -620,94 +624,212 @@ def tela_principal():
             df_prop = df_prop.iloc[::-1] 
             hoje = datetime.datetime.now()
             
-            for idx, row in df_prop.iterrows():
-                linha_real_planilha = row.name + 2 
-                data_p = str(row.get('Data_Proposta', '')).split(" ")[0]
+            # VISÃO 1: TABELA ANALÍTICA (DESKTOP)
+            if "Tabela" in modo_prop:
+                st.write("---")
+                h1, h_ult, h2, h_np, h3, h4, h5, h6, h7 = st.columns([2, 2, 3, 3, 2, 2, 2, 2, 2])
+                with h1: st.markdown("**Data**")
+                with h_ult: st.markdown("**Últ. Prop**")
+                with h2: st.markdown("**Cliente**")
+                with h_np: st.markdown("**Ref. Proposta**")
+                with h3: st.markdown("**Status**")
+                with h4: st.markdown("**Restante**")
+                with h5: st.markdown("**Serviços**")
+                with h6: st.markdown("**Setup**")
+                with h7: st.markdown("**Ação**")
+                st.write("---")
                 
-                cliente = str(row.get('Nome_Cliente', ''))
-                nome_prop = str(row.get('Nome_Proposta', ''))
-                if not nome_prop or nome_prop == 'nan': nome_prop = "Principal"
-                
-                status = str(row.get('Status_Proposta', 'Em Negociação')).strip() or "Em Negociação"
-                mrr, setup = str(row.get('Total_MRR', '')), str(row.get('Total_Setup', ''))
-                data_ref_str = str(row.get('Data_Proposta_Renovada', '')).strip() or str(row.get('Data_Proposta', '')).strip()
-                
-                tempo_faltante = "-"
-                if status == "Em Negociação" and data_ref_str:
-                    try:
-                        d_ref = datetime.datetime.strptime(data_ref_str, "%d/%m/%Y %H:%M:%S") if " " in data_ref_str else datetime.datetime.strptime(data_ref_str, "%d/%m/%Y")
-                        faltam = 10 - (hoje - d_ref).days
-                        if faltam > 0: tempo_faltante = f"{faltam} dia(s)"
-                        elif faltam == 0: tempo_faltante = "Vence hoje"
-                        else: tempo_faltante = "Vencida"
-                    except: pass
-                
-                cor_status = "🟢" if status == "Em Negociação" else ("🔴" if status == "Perdida" else "⚫")
-                
-                with st.expander(f"{cor_status} {cliente} — {nome_prop} ({data_p})"):
-                    st.markdown(f"""
-                        **Status:** {status} | **Validade:** {tempo_faltante}<br>
-                        **Serviços (Mensal):** {mrr} | **Setup:** {setup}
-                    """, unsafe_allow_html=True)
+                for idx, row in df_prop.iterrows():
+                    linha_real_planilha = row.name + 2 
+                    data_p = str(row.get('Data_Proposta', '')).split(" ")[0]
+                    data_ult_str = str(row.get('Data_Proposta_Renovada', '')).split(" ")[0]
+                    data_ult_prop = data_ult_str if data_ult_str else "-"
                     
-                    if status == "Em Negociação":
-                        if st.button("🔄 Renovar / Editar Proposta", key=f"ren_tab_{linha_real_planilha}", type="primary", use_container_width=True):
-                            st.session_state["renovar_proposta_idx"] = linha_real_planilha
-                            st.session_state["renovar_proposta_dados"] = row.to_dict()
-                            st.rerun()
+                    cliente = str(row.get('Nome_Cliente', ''))
+                    nome_prop = str(row.get('Nome_Proposta', ''))
+                    if not nome_prop or nome_prop == 'nan': nome_prop = "Principal"
+                    
+                    status = str(row.get('Status_Proposta', 'Em Negociação')).strip() or "Em Negociação"
+                    mrr, setup = str(row.get('Total_MRR', '')), str(row.get('Total_Setup', ''))
+                    data_ref_str = str(row.get('Data_Proposta_Renovada', '')).strip() or str(row.get('Data_Proposta', '')).strip()
+                    
+                    tempo_faltante = "-"
+                    if status == "Em Negociação" and data_ref_str:
+                        try:
+                            d_ref = datetime.datetime.strptime(data_ref_str, "%d/%m/%Y %H:%M:%S") if " " in data_ref_str else datetime.datetime.strptime(data_ref_str, "%d/%m/%Y")
+                            faltam = 10 - (hoje - d_ref).days
+                            if faltam > 0: tempo_faltante = f"{faltam} dia(s)"
+                            elif faltam == 0: tempo_faltante = "Vence hoje"
+                            else: tempo_faltante = "Vencida"
+                        except: pass
+                    
+                    cor_status = "🟢 " if status == "Em Negociação" else ("🔴 " if status == "Perdida" else "⚫ ")
+                    
+                    c1, c_ult, c2, c_np, c3, c4, c5, c6, c7 = st.columns([2, 2, 3, 3, 2, 2, 2, 2, 2])
+                    with c1: st.write(data_p)
+                    with c_ult: st.write(data_ult_prop)
+                    with c2: st.write(cliente)
+                    with c_np: st.write(nome_prop)
+                    with c3: st.write(f"{cor_status}{status}")
+                    with c4: st.write(tempo_faltante)
+                    with c5: st.write(mrr)
+                    with c6: st.write(setup)
+                    with c7:
+                        if status == "Em Negociação":
+                            if st.button("🔄 Renovar", key=f"ren_tab_{linha_real_planilha}", use_container_width=True):
+                                st.session_state["renovar_proposta_idx"] = linha_real_planilha
+                                st.session_state["renovar_proposta_dados"] = row.to_dict()
+                                st.rerun()
+
+            # VISÃO 2: CARTÕES (CELULAR)
+            else:
+                for idx, row in df_prop.iterrows():
+                    linha_real_planilha = row.name + 2 
+                    data_p = str(row.get('Data_Proposta', '')).split(" ")[0]
+                    cliente = str(row.get('Nome_Cliente', ''))
+                    nome_prop = str(row.get('Nome_Proposta', ''))
+                    if not nome_prop or nome_prop == 'nan': nome_prop = "Principal"
+                    
+                    status = str(row.get('Status_Proposta', 'Em Negociação')).strip() or "Em Negociação"
+                    mrr, setup = str(row.get('Total_MRR', '')), str(row.get('Total_Setup', ''))
+                    data_ref_str = str(row.get('Data_Proposta_Renovada', '')).strip() or str(row.get('Data_Proposta', '')).strip()
+                    
+                    tempo_faltante = "-"
+                    if status == "Em Negociação" and data_ref_str:
+                        try:
+                            d_ref = datetime.datetime.strptime(data_ref_str, "%d/%m/%Y %H:%M:%S") if " " in data_ref_str else datetime.datetime.strptime(data_ref_str, "%d/%m/%Y")
+                            faltam = 10 - (hoje - d_ref).days
+                            if faltam > 0: tempo_faltante = f"{faltam} dia(s)"
+                            elif faltam == 0: tempo_faltante = "Vence hoje"
+                            else: tempo_faltante = "Vencida"
+                        except: pass
+                    
+                    cor_status = "🟢" if status == "Em Negociação" else ("🔴" if status == "Perdida" else "⚫")
+                    
+                    with st.expander(f"{cor_status} {cliente} — {nome_prop} ({data_p})"):
+                        st.markdown(f"""
+                            **Status:** {status} | **Validade:** {tempo_faltante}<br>
+                            **Serviços (Mensal):** {mrr} | **Setup:** {setup}
+                        """, unsafe_allow_html=True)
+                        
+                        if status == "Em Negociação":
+                            if st.button("🔄 Renovar / Editar Proposta", key=f"ren_tab_{linha_real_planilha}", type="primary", use_container_width=True):
+                                st.session_state["renovar_proposta_idx"] = linha_real_planilha
+                                st.session_state["renovar_proposta_dados"] = row.to_dict()
+                                st.rerun()
 
     # --- TELA: MEUS LEADS ---
     elif st.session_state["etapa_atual"] == "meus_leads":
         st.header("📋 Meus Leads")
         df_leads = carregar_meus_leads(st.session_state["email_usuario"])
         
-        if df_leads.empty: st.info("Nenum lead encontrado no seu funil.")
+        c_busc, c_modo = st.columns([7, 3])
+        with c_modo:
+            modo_lead = st.radio("Modo de Exibição:", ["📱 Cartões (Celular)", "🖥️ Tabela Analítica"], key="modo_visao_leads", horizontal=True)
+
+        if df_leads.empty: st.info("Nenhum lead encontrado no seu funil.")
         else:
             df_leads.columns = df_leads.columns.astype(str).str.strip()
             df_prop.columns = df_prop.columns.astype(str).str.strip() if not df_prop.empty else []
             
-            busca = st.text_input("🔍 Buscar Lead por Nome ou Telefone:")
+            with c_busc:
+                busca = st.text_input("🔍 Buscar Lead por Nome ou Telefone:")
             if busca: df_leads = df_leads[df_leads.astype(str).apply(lambda x: x.str.contains(busca, case=False)).any(axis=1)]
             df_leads = df_leads.iloc[::-1]
-            
-            for idx, row in df_leads.iterrows():
-                linha_real_planilha = row.name + 2
-                
-                nome = str(row.get('Nome_Razao', 'Não Informado')).strip()
-                telefone = str(row.get('Telefone', '-')).strip()
-                endereco, numero, cidade = str(row.get('Endereco', '')).strip(), str(row.get('Numero', '')).strip(), str(row.get('Cidade', '')).strip()
-                end_curto = f"{endereco}, {numero} - {cidade}".replace("nan", "").strip(" ,-") or "-"
-                data_cad = str(row.get('Data_Cadastro', '-')).split(" ")[0]
-                
-                status_lead = "🔵 Lead"
-                if not df_prop.empty and 'Nome_Cliente' in df_prop.columns:
-                    prop_cliente = df_prop[df_prop['Nome_Cliente'].astype(str).str.strip() == nome]
-                    if not prop_cliente.empty:
-                        stat = str(prop_cliente.iloc[-1].get('Status_Proposta', '')).strip()
-                        status_lead = "🔴 Perdida" if stat == "Perdida" else "🟢 Proposta"
-                
-                cpf_cnpj = str(row.get("CPF_CNPJ", "")).replace('nan', '').strip() or "-"
-                email_cli = str(row.get("Email_Cliente", "")).replace('nan', '').strip() or "-"
-                contato_cli = str(row.get("Contato", "")).replace('nan', '').strip() or "-"
 
-                with st.expander(f"👤 {nome} ({status_lead})"):
-                    st.markdown(f"""
-                        📞 <b>Telefone:</b> {telefone}<br>
-                        📍 <b>Endereço:</b> {end_curto}<br>
-                        📄 <b>CPF/CNPJ:</b> {cpf_cnpj} | ✉️ <b>E-mail:</b> {email_cli}<br>
-                        👤 <b>Contato:</b> {contato_cli} | 📅 <b>Cadastro:</b> {data_cad}
-                    """, unsafe_allow_html=True)
-                    st.write("")
+            # VISÃO 1: TABELA ANALÍTICA (DESKTOP)
+            if "Tabela" in modo_lead:
+                st.write("---")
+                h1, h2, h3, h4, h5, h6, h7 = st.columns([4, 3, 4, 2, 2, 2, 3])
+                with h1: st.markdown("**👤 Nome**"); 
+                with h2: st.markdown("**📞 Telefone**")
+                with h3: st.markdown("**📍 Endereço**"); 
+                with h4: st.markdown("**📅 Cadastro**")
+                with h5: st.markdown("**📊 Status**"); 
+                with h6: st.markdown("**📅 Últ. Prop**")
+                st.write("---")
                     
-                    c_b1, c_b2 = st.columns([7, 3])
-                    with c_b1:
-                        if st.button("➕ Criar Proposta", key=f"btn_lead_{idx}", type="primary", use_container_width=True):
-                            st.session_state.update({"lead_dados": {"data_cadastro": data_cad, "nome": nome, "cpf_cnpj": cpf_cnpj, "endereco": endereco.replace('nan', ''), "numero": numero.replace('nan', ''), "cidade": cidade.replace('nan', ''), "estado": str(row.get("Estado", "")).replace('nan', ''), "telefone": telefone, "email_cliente": email_cli, "contato": contato_cli, "gps": str(row.get("Coordenadas_GPS", "")).replace('nan', '')}, "lead_salvo": True, "gatilho_limpar_carrinho": True, "etapa_atual": "simulador", "editando_lead_idx": linha_real_planilha})
-                            st.rerun()
-                    with c_b2:
-                        if st.button("✏️ Editar", help="Editar dados do Lead", key=f"btn_edit_lead_{idx}", use_container_width=True):
-                            st.session_state.update({"lead_dados": {"data_cadastro": data_cad, "nome": nome, "cpf_cnpj": cpf_cnpj, "endereco": endereco.replace('nan', ''), "numero": numero.replace('nan', ''), "cidade": cidade.replace('nan', ''), "estado": str(row.get("Estado", "")).replace('nan', ''), "telefone": telefone, "email_cliente": email_cli, "contato": contato_cli, "gps": str(row.get("Coordenadas_GPS", "")).replace('nan', '')}, "lead_salvo": True, "etapa_atual": "lead", "editando_lead_idx": linha_real_planilha})
-                            st.rerun()
+                for idx, row in df_leads.iterrows():
+                    linha_real_planilha = row.name + 2
+                    nome = str(row.get('Nome_Razao', 'Não Informado')).strip()
+                    telefone = str(row.get('Telefone', '-')).strip()
+                    endereco, numero, cidade = str(row.get('Endereco', '')).strip(), str(row.get('Numero', '')).strip(), str(row.get('Cidade', '')).strip()
+                    end_curto = f"{endereco}, {numero} - {cidade}".replace("nan", "").strip(" ,-") or "-"
+                    data_cad = str(row.get('Data_Cadastro', '-')).split(" ")[0]
+                    
+                    status_lead, data_ult_prop = "🔵 Lead", "-"
+                    if not df_prop.empty and 'Nome_Cliente' in df_prop.columns:
+                        prop_cliente = df_prop[df_prop['Nome_Cliente'].astype(str).str.strip() == nome]
+                        if not prop_cliente.empty:
+                            stat = str(prop_cliente.iloc[-1].get('Status_Proposta', '')).strip()
+                            status_lead = "🔴 Perdida" if stat == "Perdida" else "🟢 Proposta"
+                            data_ult_prop = str(prop_cliente.iloc[-1].get('Data_Proposta', '-')).split(" ")[0]
+                    
+                    cpf_cnpj = str(row.get("CPF_CNPJ", "")).replace('nan', '').strip() or "-"
+                    email_cli = str(row.get("Email_Cliente", "")).replace('nan', '').strip() or "-"
+                    contato_cli = str(row.get("Contato", "")).replace('nan', '').strip() or "-"
+
+                    c1, c2, c3, c4, c5, c6, c7 = st.columns([4, 3, 4, 2, 2, 2, 3])
+                    with c1: 
+                        with st.expander(f"👤 {nome}"):
+                            st.markdown(f"<span style='font-size: 0.85rem; color: #475569;'><b>CPF/CNPJ:</b> {cpf_cnpj}<br><b>E-mail:</b> {email_cli}<br><b>Contato:</b> {contato_cli}</span>", unsafe_allow_html=True)
+                    
+                    with c2: st.markdown(f"<div style='margin-top: 0.4rem;'>{telefone}</div>", unsafe_allow_html=True)
+                    with c3: st.markdown(f"<div style='margin-top: 0.4rem;'>{end_curto}</div>", unsafe_allow_html=True)
+                    with c4: st.markdown(f"<div style='margin-top: 0.4rem;'>{data_cad}</div>", unsafe_allow_html=True)
+                    with c5: st.markdown(f"<div style='margin-top: 0.4rem;'>{status_lead}</div>", unsafe_allow_html=True)
+                    with c6: st.markdown(f"<div style='margin-top: 0.4rem;'>{data_ult_prop}</div>", unsafe_allow_html=True)
+                    
+                    with c7:
+                        btn1, btn2 = st.columns([7, 3])
+                        with btn1:
+                            if st.button("Proposta", key=f"btn_lead_{idx}", use_container_width=True):
+                                st.session_state.update({"lead_dados": {"data_cadastro": data_cad, "nome": nome, "cpf_cnpj": cpf_cnpj, "endereco": endereco.replace('nan', ''), "numero": numero.replace('nan', ''), "cidade": cidade.replace('nan', ''), "estado": str(row.get("Estado", "")).replace('nan', ''), "telefone": telefone, "email_cliente": email_cli, "contato": contato_cli, "gps": str(row.get("Coordenadas_GPS", "")).replace('nan', '')}, "lead_salvo": True, "gatilho_limpar_carrinho": True, "etapa_atual": "simulador", "editando_lead_idx": linha_real_planilha})
+                                st.rerun()
+                        with btn2:
+                            if st.button("✏️", help="Editar dados do Lead", key=f"btn_edit_lead_{idx}", use_container_width=True):
+                                st.session_state.update({"lead_dados": {"data_cadastro": data_cad, "nome": nome, "cpf_cnpj": cpf_cnpj, "endereco": endereco.replace('nan', ''), "numero": numero.replace('nan', ''), "cidade": cidade.replace('nan', ''), "estado": str(row.get("Estado", "")).replace('nan', ''), "telefone": telefone, "email_cliente": email_cli, "contato": contato_cli, "gps": str(row.get("Coordenadas_GPS", "")).replace('nan', '')}, "lead_salvo": True, "etapa_atual": "lead", "editando_lead_idx": linha_real_planilha})
+                                st.rerun()
+
+            # VISÃO 2: CARTÕES (CELULAR)
+            else:
+                for idx, row in df_leads.iterrows():
+                    linha_real_planilha = row.name + 2
+                    nome = str(row.get('Nome_Razao', 'Não Informado')).strip()
+                    telefone = str(row.get('Telefone', '-')).strip()
+                    endereco, numero, cidade = str(row.get('Endereco', '')).strip(), str(row.get('Numero', '')).strip(), str(row.get('Cidade', '')).strip()
+                    end_curto = f"{endereco}, {numero} - {cidade}".replace("nan", "").strip(" ,-") or "-"
+                    data_cad = str(row.get('Data_Cadastro', '-')).split(" ")[0]
+                    
+                    status_lead = "🔵 Lead"
+                    if not df_prop.empty and 'Nome_Cliente' in df_prop.columns:
+                        prop_cliente = df_prop[df_prop['Nome_Cliente'].astype(str).str.strip() == nome]
+                        if not prop_cliente.empty:
+                            stat = str(prop_cliente.iloc[-1].get('Status_Proposta', '')).strip()
+                            status_lead = "🔴 Perdida" if stat == "Perdida" else "🟢 Proposta"
+                    
+                    cpf_cnpj = str(row.get("CPF_CNPJ", "")).replace('nan', '').strip() or "-"
+                    email_cli = str(row.get("Email_Cliente", "")).replace('nan', '').strip() or "-"
+                    contato_cli = str(row.get("Contato", "")).replace('nan', '').strip() or "-"
+
+                    with st.expander(f"👤 {nome} ({status_lead})"):
+                        st.markdown(f"""
+                            📞 <b>Telefone:</b> {telefone}<br>
+                            📍 <b>Endereço:</b> {end_curto}<br>
+                            📄 <b>CPF/CNPJ:</b> {cpf_cnpj} | ✉️ <b>E-mail:</b> {email_cli}<br>
+                            👤 <b>Contato:</b> {contato_cli} | 📅 <b>Cadastro:</b> {data_cad}
+                        """, unsafe_allow_html=True)
+                        st.write("")
+                        
+                        c_b1, c_b2 = st.columns([7, 3])
+                        with c_b1:
+                            if st.button("➕ Criar Proposta", key=f"btn_lead_{idx}", type="primary", use_container_width=True):
+                                st.session_state.update({"lead_dados": {"data_cadastro": data_cad, "nome": nome, "cpf_cnpj": cpf_cnpj, "endereco": endereco.replace('nan', ''), "numero": numero.replace('nan', ''), "cidade": cidade.replace('nan', ''), "estado": str(row.get("Estado", "")).replace('nan', ''), "telefone": telefone, "email_cliente": email_cli, "contato": contato_cli, "gps": str(row.get("Coordenadas_GPS", "")).replace('nan', '')}, "lead_salvo": True, "gatilho_limpar_carrinho": True, "etapa_atual": "simulador", "editando_lead_idx": linha_real_planilha})
+                                st.rerun()
+                        with c_b2:
+                            if st.button("✏️ Editar", help="Editar dados do Lead", key=f"btn_edit_lead_{idx}", use_container_width=True):
+                                st.session_state.update({"lead_dados": {"data_cadastro": data_cad, "nome": nome, "cpf_cnpj": cpf_cnpj, "endereco": endereco.replace('nan', ''), "numero": numero.replace('nan', ''), "cidade": cidade.replace('nan', ''), "estado": str(row.get("Estado", "")).replace('nan', ''), "telefone": telefone, "email_cliente": email_cli, "contato": contato_cli, "gps": str(row.get("Coordenadas_GPS", "")).replace('nan', '')}, "lead_salvo": True, "etapa_atual": "lead", "editando_lead_idx": linha_real_planilha})
+                                st.rerun()
 
     # --- TELA: LEAD ---
     elif st.session_state["etapa_atual"] == "lead":
