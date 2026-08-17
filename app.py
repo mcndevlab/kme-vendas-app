@@ -52,14 +52,24 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# LOGO KHRONOS VETORIAL ALTA DEFINIÇÃO (PNG COMPACTO NATIVO)
-LOGO_KHRONOS_PNG = "https://raw.githubusercontent.com/streamlit/share-streamlit-png/main/khronos_logo.png"
+# ESCUDO KHRONOS VETORIAL SVG NATIVO (CARREGAMENTO IMPRESSIONANTE E SEM DEPENDER DE SERVIDOR EXTERNO)
+SVG_ESCUDO_KHRONOS = """
+<svg width="60" height="55" viewBox="0 0 500 400" xmlns="http://www.w3.org/2000/svg">
+    <path d="M 10 10 L 490 10 L 490 220 Q 250 400 10 220 Z" fill="#e30613"/>
+    <path d="M 10 210 L 490 210 L 490 220 Q 250 400 10 220 Z" fill="#b0000a"/>
+    <g transform="translate(195, 80) scale(1.35)">
+        <path d="M 0 30 L 40 0 L 50 12 L 20 35 L 50 58 L 40 70 Z" fill="#fce000"/>
+        <path d="M 15 18 L 55 -12 L 65 0 L 35 23 L 65 46 L 55 58 Z" fill="#fce000"/>
+    </g>
+    <text x="250" y="270" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="900" font-style="italic" font-size="78" fill="#ffffff" text-anchor="middle">Khronos</text>
+</svg>
+"""
 
 # Função para desenhar o Header com Escudo Perfeito
-def exibir_header_khronos(titulo="Khronos Sales", subtitulo="Acesso ao Portal Comercial de Vendas", altura=65):
+def exibir_header_khronos(titulo="Khronos Sales", subtitulo="Acesso ao Portal Comercial de Vendas"):
     html_header = f"""
     <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
-        <img src="https://grupokhronos.com.br/wp-content/uploads/2021/04/khronos-logo.png" style="height: {altura}px; width: auto; object-fit: contain;">
+        {SVG_ESCUDO_KHRONOS}
         <div>
             <h1 style="margin: 0; padding: 0; font-size: 1.8rem; font-weight: 800; color: #1e293b; line-height: 1.1;">{titulo}</h1>
             <p style="margin: 0; padding: 0; font-size: 0.9rem; color: #64748b;">{subtitulo}</p>
@@ -69,9 +79,11 @@ def exibir_header_khronos(titulo="Khronos Sales", subtitulo="Acesso ao Portal Co
     st.markdown(html_header, unsafe_allow_html=True)
 
 def exibir_logo_sidebar():
-    html_sidebar = """
+    html_sidebar = f"""
     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
-        <img src="https://grupokhronos.com.br/wp-content/uploads/2021/04/khronos-logo.png" style="height: 45px; width: auto; object-fit: contain;">
+        <div style="transform: scale(0.75); transform-origin: left center;">
+            {SVG_ESCUDO_KHRONOS}
+        </div>
         <div>
             <h3 style="margin: 0; padding: 0; font-size: 1.2rem; font-weight: 800; color: #1e293b;">Khronos Sales</h3>
         </div>
@@ -462,7 +474,7 @@ if "autenticado" not in st.session_state:
 # 4. TELA DE LOGIN E MAESTRO
 # ==========================================
 def tela_login():
-    exibir_header_khronos("Khronos Sales", "Acesso ao Portal Comercial de Vendas", 65)
+    exibir_header_khronos("Khronos Sales", "Acesso ao Portal Comercial de Vendas")
     st.write("---")
     
     with st.form("form_login"):
