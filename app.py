@@ -31,10 +31,12 @@ st.markdown("""
         align-items: center !important;
         width: 100% !important;
     }
+    
     div.stButton > button * {
         text-align: left !important;
         justify-content: flex-start !important;
     }
+    
     div.stButton > button[kind="primary"] {
         justify-content: center !important;
         text-align: center !important;
@@ -43,6 +45,7 @@ st.markdown("""
         text-align: center !important;
         justify-content: center !important;
     }
+    
     .card-mobile {
         background-color: #f8fafc;
         border-left: 4px solid #0066cc;
@@ -149,16 +152,29 @@ def carregar_todos_leads():
         return df
     except: return pd.DataFrame()
 
+# CORREÇÃO DEFINITIVA: Leitura robusta forçando cabeçalhos da Temperatura (Colunas R e S)
 @st.cache_data(ttl=300)
 def carregar_todas_propostas():
     try:
-        df = pd.DataFrame(conectar_banco().worksheet("Propostas").get_all_records())
-        if not df.empty:
+        dados = conectar_banco().worksheet("Propostas").get_all_values()
+        if len(dados) > 1:
+            cabecalho = dados[0]
+            # Blinda o sistema caso as colunas R e S não tenham nome na planilha
+            while len(cabecalho) < 19:
+                cabecalho.append(f"Coluna_{len(cabecalho)+1}")
+            
+            cabecalho[17] = "Temperatura"
+            cabecalho[18] = "Data_Temperatura_Renovada"
+            
+            df = pd.DataFrame(dados[1:], columns=cabecalho)
             df.columns = df.columns.astype(str).str.strip()
+            
             if 'Email_Vendedor' in df.columns:
                 df['Email_Vendedor'] = df['Email_Vendedor'].astype(str).str.strip().str.lower()
-        return df
-    except: return pd.DataFrame()
+            return df
+        return pd.DataFrame()
+    except Exception as e: 
+        return pd.DataFrame()
 
 @st.cache_data(ttl=300)
 def carregar_meus_leads(email):
@@ -300,29 +316,6 @@ def atualizar_proposta_modificada(row_index, nome_proposta, total_mrr, total_set
         return True
     except: return False
 
-def efetivar_renovacao(row_index_planilha, novo_mrr, novo_setup, nova_temp):
-    try:
-        aba = conectar_banco().worksheet("Propostas")
-        agora = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        aba.update(f"E{row_index_planilha}:F{row_index_planilha}", [[novo_mrr, novo_setup]])
-        aba.update(f"N{row_index_planilha}:O{row_index_planilha}", [["Em Negociação", agora]])
-        aba.update(f"R{row_index_planilha}:S{row_index_planilha}", [[nova_temp, agora]])
-        return True
-    except: return False
-
-def efetivar_atualizacao_temperatura(row_index_planilha, nova_temp):
-    try:
-        agora = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        conectar_banco().worksheet("Propostas").update(f"R{row_index_planilha}:S{row_index_planilha}", [[nova_temp, agora]])
-        return True
-    except: return False
-
-def efetivar_perda(row_index_planilha, motivo):
-    try:
-        conectar_banco().worksheet("Propostas").update(f"N{row_index_planilha}:P{row_index_planilha}", [["Perdida", "", motivo]])
-        return True
-    except: return False
-
 def calcular_novos_valores_proposta(row_data, df_produtos, df_valor_sensor):
     itens_str = str(row_data.get('Itens_Orcamento', ''))
     desc_p, desc_a, desc_i = converter_para_numero(row_data.get('Desc_Prod', '0')) / 100, converter_para_numero(row_data.get('Desc_Alarme', '0')) / 100, converter_para_numero(row_data.get('Desc_Imagem', '0')) / 100
@@ -361,6 +354,29 @@ def calcular_novos_valores_proposta(row_data, df_produtos, df_valor_sensor):
             
     novo_total_mrr, novo_total_setup = (bruto_alarme * (1 - desc_a)) + (bruto_imagem * (1 - desc_i)), (bruto_prod * (1 - desc_p)) + mao_obra
     return f"R$ {novo_total_mrr:,.2f}".replace(",", "_").replace(".", ",").replace("_", "."), f"R$ {novo_total_setup:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+
+def efetivar_renovacao(row_index_planilha, novo_mrr, novo_setup, nova_temp):
+    try:
+        aba = conectar_banco().worksheet("Propostas")
+        agora = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        aba.update(f"E{row_index_planilha}:F{row_index_planilha}", [[novo_mrr, novo_setup]])
+        aba.update(f"N{row_index_planilha}:O{row_index_planilha}", [["Em Negociação", agora]])
+        aba.update(f"R{row_index_planilha}:S{row_index_planilha}", [[nova_temp, agora]])
+        return True
+    except: return False
+
+def efetivar_atualizacao_temperatura(row_index_planilha, nova_temp):
+    try:
+        agora = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        conectar_banco().worksheet("Propostas").update(f"R{row_index_planilha}:S{row_index_planilha}", [[nova_temp, agora]])
+        return True
+    except: return False
+
+def efetivar_perda(row_index_planilha, motivo):
+    try:
+        conectar_banco().worksheet("Propostas").update(f"N{row_index_planilha}:P{row_index_planilha}", [["Perdida", "", motivo]])
+        return True
+    except: return False
 
 def carregar_proposta_para_simulador(idx_planilha, dados_prop, df_produtos, df_leads):
     novo_carrinho = []
@@ -781,6 +797,12 @@ def tela_principal():
 
         df_prop = df_prop.iloc[::-1] if not df_prop.empty else pd.DataFrame()
         hoje = datetime.datetime.now()
+        cfg = carregar_configuracoes()
+        vertical_user = str(st.session_state.get('vertical_usuario', '')).strip().lower()
+        if "varejo" in vertical_user: limite_vencimento, limite_temp = int(cfg.get("Venc_Proposta_Varejo", 10)), int(cfg.get("Temp_Proposta_Varejo", 5))
+        elif "condominio" in vertical_user: limite_vencimento, limite_temp = int(cfg.get("Venc_Proposta_Cond", 10)), int(cfg.get("Temp_Proposta_Cond", 5))
+        elif "grandes_contas" in vertical_user or "gc" in vertical_user: limite_vencimento, limite_temp = int(cfg.get("Venc_Proposta_GC", 10)), int(cfg.get("Temp_Proposta_GC", 5))
+        else: limite_vencimento, limite_temp = int(cfg.get("Venc_Proposta", 10)), int(cfg.get("Temp_Proposta", 5))
 
         if df_prop.empty: st.info("Nenhuma proposta registrada.")
         else:
@@ -995,7 +1017,7 @@ def tela_principal():
             if st.button("✏️ Editar Lead", use_container_width=True): st.session_state["etapa_atual"] = "lead"; st.rerun()
         
         c_nome, c_temp = st.columns([7, 3])
-        nome_proposta = c_nome.text_input("📝 Nome/Referência da Proposta", value=st.session_state.get("nome_proposta_atual", ""))
+        nome_proposta = c_nome.text_input("📝 Nome/Referência da Proposta (Ex: Matriz, Filial Centro)", value=st.session_state.get("nome_proposta_atual", ""))
         temperatura_escolhida = c_temp.selectbox("🌡️ Temperatura Atual:", ["Quente 🔥", "Morno 🌤️", "Frio ❄️"])
         st.divider()
 
