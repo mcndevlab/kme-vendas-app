@@ -372,6 +372,12 @@ def efetivar_perda(row_index_planilha, motivo):
         return True
     except: return False
 
+def efetivar_aprovacao(row_index_planilha):
+    try:
+        conectar_banco().worksheet("Propostas").update(f"N{row_index_planilha}:P{row_index_planilha}", [["Aprovada", "", ""]])
+        return True
+    except: return False
+
 def carregar_proposta_para_simulador(idx_planilha, dados_prop, df_produtos, df_leads):
     novo_carrinho = []
     for item in str(dados_prop.get('Itens_Orcamento', '')).split(";"):
@@ -540,6 +546,7 @@ def tela_principal():
     cfg = carregar_configuracoes()
     vertical_user = str(st.session_state.get('vertical_usuario', '')).strip().lower()
     
+    # MOTOR DE PRAZOS POR VERTICAL (VENCIMENTO E TEMPERATURA)
     if "varejo" in vertical_user: limite_vencimento, limite_temp = int(cfg.get("Venc_Proposta_Varejo", 10)), int(cfg.get("Temp_Proposta_Varejo", 5))
     elif "condominio" in vertical_user: limite_vencimento, limite_temp = int(cfg.get("Venc_Proposta_Cond", 10)), int(cfg.get("Temp_Proposta_Cond", 5))
     elif "grandes_contas" in vertical_user or "gc" in vertical_user: limite_vencimento, limite_temp = int(cfg.get("Venc_Proposta_GC", 10)), int(cfg.get("Temp_Proposta_GC", 5))
@@ -590,10 +597,10 @@ def tela_principal():
                 
                 if p['vencida_prop']: 
                     st.caption(f"🚨 **Proposta Vencida** há {p['dias_prop']} dias. (Limite: {limite_vencimento}d)")
-                    opcoes_acao = ["Selecione...", f"Renovar Proposta e Temperatura", "Perda na negociação"]
+                    opcoes_acao = ["Selecione...", f"Renovar Proposta e Temperatura", "Aprovação da Proposta", "Perda na negociação"]
                 else: 
                     st.caption(f"⚠️ **Temperatura Vencida** há {p['dias_temp']} dias. (Limite: {limite_temp}d)")
-                    opcoes_acao = ["Selecione...", "Atualizar Temperatura", "Perda na negociação"]
+                    opcoes_acao = ["Selecione...", "Atualizar Temperatura", "Aprovação da Proposta", "Perda na negociação"]
                 
                 c1, c2 = st.columns(2)
                 acao = c1.selectbox("O que aconteceu com esta negociação?", opcoes_acao, key=f"acao_{p['idx_planilha']}")
@@ -610,6 +617,11 @@ def tela_principal():
                         elif st.button("Confirmar Perda", type="primary", key=f"btn_{p['idx_planilha']}"):
                             if efetivar_perda(p['idx_planilha'], motivo): st.toast(f"Proposta atualizada para Perdida."); st.cache_data.clear(); st.rerun()
                     
+                    elif acao == "Aprovação da Proposta":
+                        if st.button("🏆 Confirmar Aprovação", type="primary", key=f"btn_aprov_{p['idx_planilha']}"):
+                            if efetivar_aprovacao(p['idx_planilha']):
+                                st.toast("Proposta Aprovada com sucesso! 🏆"); st.cache_data.clear(); st.rerun()
+
                     elif acao == "Atualizar Temperatura":
                         if st.button("Confirmar Nova Temperatura", type="primary", key=f"btn_temp_{p['idx_planilha']}"):
                             if efetivar_atualizacao_temperatura(p['idx_planilha'], nova_temp):
