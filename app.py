@@ -290,22 +290,22 @@ def atualizar_lead(row_index, ld):
         return True
     except: return False
 
-def salvar_proposta(nome_cliente, nome_proposta, vendedor, email, total_mrr, total_setup, forma_pag, parcelas, val_parcela, itens, desc_p, desc_a, desc_i, temperatura):
+def salvar_proposta(nome_cliente, nome_proposta, vendedor, email, total_mrr, total_setup, forma_pag, parcelas, val_parcela, itens, desc_p, desc_a, desc_i, temperatura, status_prop):
     try:
         aba = conectar_banco().worksheet("Propostas")
         agora = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         resumo_itens = "; ".join([f"{item['quantidade']}x {item['nome']} [Cód: {item.get('codigo', '-')}] (R$ {item.get('preco_calculado', item.get('preco_venda', 0)):,.2f})" for item in itens])
-        nova_linha = [agora, nome_cliente, vendedor, email, f"R$ {total_mrr:,.2f}".replace(",", "_").replace(".", ",").replace("_", "."), f"R$ {total_setup:,.2f}".replace(",", "_").replace(".", ",").replace("_", "."), forma_pag, f"{parcelas}x", val_parcela, resumo_itens, f"{desc_p:.1f}%", f"{desc_a:.1f}%", f"{desc_i:.1f}%", "Em Negociação", "", "", nome_proposta, temperatura, agora]
+        nova_linha = [agora, nome_cliente, vendedor, email, f"R$ {total_mrr:,.2f}".replace(",", "_").replace(".", ",").replace("_", "."), f"R$ {total_setup:,.2f}".replace(",", "_").replace(".", ",").replace("_", "."), forma_pag, f"{parcelas}x", val_parcela, resumo_itens, f"{desc_p:.1f}%", f"{desc_a:.1f}%", f"{desc_i:.1f}%", status_prop, "", "", nome_proposta, temperatura, agora]
         aba.append_row(nova_linha)
         return True
     except: return False
 
-def atualizar_proposta_modificada(row_index, nome_proposta, total_mrr, total_setup, forma_pag, parcelas, val_parcela, itens, desc_p, desc_a, desc_i, temperatura):
+def atualizar_proposta_modificada(row_index, nome_proposta, total_mrr, total_setup, forma_pag, parcelas, val_parcela, itens, desc_p, desc_a, desc_i, temperatura, status_prop):
     try:
         aba = conectar_banco().worksheet("Propostas")
         agora = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         resumo_itens = "; ".join([f"{item['quantidade']}x {item['nome']} [Cód: {item.get('codigo', '-')}] (R$ {item.get('preco_calculado', item.get('preco_venda', 0)):,.2f})" for item in itens])
-        valores = [[f"R$ {total_mrr:,.2f}".replace(",", "_").replace(".", ",").replace("_", "."), f"R$ {total_setup:,.2f}".replace(",", "_").replace(".", ",").replace("_", "."), forma_pag, f"{parcelas}x", val_parcela, resumo_itens, f"{desc_p:.1f}%", f"{desc_a:.1f}%", f"{desc_i:.1f}%", "Em Negociação", agora, "", nome_proposta, temperatura, agora]]
+        valores = [[f"R$ {total_mrr:,.2f}".replace(",", "_").replace(".", ",").replace("_", "."), f"R$ {total_setup:,.2f}".replace(",", "_").replace(".", ",").replace("_", "."), forma_pag, f"{parcelas}x", val_parcela, resumo_itens, f"{desc_p:.1f}%", f"{desc_a:.1f}%", f"{desc_i:.1f}%", status_prop, agora, "", nome_proposta, temperatura, agora]]
         aba.update(f"E{row_index}:S{row_index}", valores)
         return True
     except: return False
@@ -389,6 +389,8 @@ def carregar_proposta_para_simulador(idx_planilha, dados_prop, df_produtos, df_l
     st.session_state["desc_alarme"] = converter_para_numero(dados_prop.get('Desc_Alarme', '0'))
     st.session_state["desc_imagem"] = converter_para_numero(dados_prop.get('Desc_Imagem', '0'))
     st.session_state["nome_proposta_atual"] = str(dados_prop.get('Nome_Proposta', ''))
+    st.session_state["temp_proposta_atual"] = str(dados_prop.get('Temperatura', 'Quente 🔥'))
+    st.session_state["status_proposta_atual"] = str(dados_prop.get('Status_Proposta', 'Em Negociação'))
     
     nome_cliente = str(dados_prop.get('Nome_Cliente', '')).strip()
     lead_row = df_leads[df_leads['Nome_Razao'].astype(str).str.strip() == nome_cliente]
@@ -409,7 +411,6 @@ def aplicar_filtros_gerenciais(df_users, df_all_leads, df_all_prop, perfil, minh
     elif perfil == "Gerente_Condominio": df_users = df_users[df_users['Vertical'].astype(str).str.strip().str.lower().str.contains('condominio')]
     
     st.write("---")
-    
     num_cols = 4 
     if perfil == "Diretoria": num_cols = 6
     elif "Gerente" in perfil: num_cols = 5
@@ -539,7 +540,6 @@ def tela_principal():
     cfg = carregar_configuracoes()
     vertical_user = str(st.session_state.get('vertical_usuario', '')).strip().lower()
     
-    # MOTOR DE PRAZOS POR VERTICAL (VENCIMENTO E TEMPERATURA)
     if "varejo" in vertical_user: limite_vencimento, limite_temp = int(cfg.get("Venc_Proposta_Varejo", 10)), int(cfg.get("Temp_Proposta_Varejo", 5))
     elif "condominio" in vertical_user: limite_vencimento, limite_temp = int(cfg.get("Venc_Proposta_Cond", 10)), int(cfg.get("Temp_Proposta_Cond", 5))
     elif "grandes_contas" in vertical_user or "gc" in vertical_user: limite_vencimento, limite_temp = int(cfg.get("Venc_Proposta_GC", 10)), int(cfg.get("Temp_Proposta_GC", 5))
@@ -557,7 +557,8 @@ def tela_principal():
         hoje = datetime.datetime.now()
         for idx, row in df_prop.iterrows():
             status = str(row.get('Status_Proposta', '')).strip()
-            if status in ["Perdida", "Fechada"]: continue
+            # PROPOSTAS APROVADAS NÃO VENCEM!
+            if status in ["Perdida", "Fechada", "Aprovada"]: continue
             
             data_ref_prop_str = str(row.get('Data_Proposta_Renovada', '')).strip() or str(row.get('Data_Proposta', '')).strip()
             data_ref_temp_str = str(row.get('Data_Temperatura_Renovada', '')).strip() or str(row.get('Data_Proposta', '')).strip()
@@ -728,7 +729,8 @@ def tela_principal():
                     if not df_eq_prop.empty and 'Nome_Cliente' in df_eq_prop.columns:
                         prop_cliente = df_eq_prop[df_eq_prop['Nome_Cliente'].astype(str).str.strip() == nome]
                         if not prop_cliente.empty:
-                            status_lead = "🔴 Perdida" if str(prop_cliente.iloc[-1].get('Status_Proposta', '')).strip() == "Perdida" else "🟢 Proposta"
+                            status_str = str(prop_cliente.iloc[-1].get('Status_Proposta', '')).strip()
+                            status_lead = "🏆 Aprovada" if status_str == "Aprovada" else ("🔴 Perdida" if status_str == "Perdida" else "🟢 Proposta")
                     
                     c1, c2, c3, c4, c5 = st.columns([2, 4, 2, 2, 2])
                     with c1: st.write(vendedor[:18] + ("..." if len(vendedor) > 18 else ""))
@@ -782,7 +784,7 @@ def tela_principal():
                         except: txt_t = "-"
                         tempo_faltante = f"P:{txt_p} | T:{txt_t}"
                     
-                    cor_status = "🟢" if status == "Em Negociação" else ("🔴" if status == "Perdida" else "⚫")
+                    cor_status = "🏆" if status == "Aprovada" else ("🟢" if status == "Em Negociação" else ("🔴" if status == "Perdida" else "⚫"))
                     
                     c1, c_v, c2, c_np, c3, c_temp, c4, c5, c6 = st.columns([2, 2, 3, 2.5, 2, 2, 2.5, 2, 2])
                     with c1: st.write(data_p)
@@ -819,7 +821,7 @@ def tela_principal():
         else:
             if "Tabela" in modo_prop:
                 st.write("---")
-                h1, h_ult, h2, h_np, h3, h_temp, h4, h5, h6 = st.columns([2, 2, 3, 2.5, 2, 2, 2.5, 2, 2])
+                h1, h_ult, h2, h_np, h3, h_temp, h4, h5, h6, h7 = st.columns([2, 2, 3, 2.5, 2, 2, 2.5, 2, 2, 2])
                 with h1: st.markdown("**Data**")
                 with h_ult: st.markdown("**Últ. Prop**")
                 with h2: st.markdown("**👤 Cliente (Ver CRM)**")
@@ -829,9 +831,11 @@ def tela_principal():
                 with h4: st.markdown("**Restante**")
                 with h5: st.markdown("**Serviços**")
                 with h6: st.markdown("**Setup**")
+                with h7: st.markdown("**Ação**")
                 st.write("---")
                 
                 for idx, row in df_prop.iterrows():
+                    linha_real_planilha = row.name + 2 
                     data_p, data_ult_str = str(row.get('Data_Proposta', '')).split(" ")[0], str(row.get('Data_Proposta_Renovada', '')).split(" ")[0]
                     cliente, nome_prop = str(row.get('Nome_Cliente', '')), str(row.get('Nome_Proposta', 'Principal'))
                     status, mrr, setup = str(row.get('Status_Proposta', 'Em Negociação')).strip() or "Em Negociação", str(row.get('Total_MRR', '')), str(row.get('Total_Setup', ''))
@@ -853,7 +857,9 @@ def tela_principal():
                         except: txt_t = "-"
                         tempo_faltante = f"P:{txt_p} | T:{txt_t}"
                     
-                    c1, c_ult, c2, c_np, c3, c_temp, c4, c5, c6 = st.columns([2, 2, 3, 2.5, 2, 2, 2.5, 2, 2])
+                    cor_status = "🏆" if status == "Aprovada" else ("🟢" if status == "Em Negociação" else ("🔴" if status == "Perdida" else "⚫"))
+                    
+                    c1, c_ult, c2, c_np, c3, c_temp, c4, c5, c6, c7 = st.columns([2, 2, 3, 2.5, 2, 2, 2.5, 2, 2, 2])
                     with c1: st.write(data_p)
                     with c_ult: st.write(data_ult_str if data_ult_str else "-")
                     with c2: 
@@ -861,13 +867,17 @@ def tela_principal():
                             itens_crm = extrair_tabela_crm_itens(row.get('Itens_Orcamento', ''))
                             if itens_crm: st.dataframe(itens_crm, use_container_width=True, hide_index=True)
                     with c_np: st.write(nome_prop[:15] + ("..." if len(nome_prop)>15 else ""))
-                    with c3: st.write(f"{'🟢 ' if status == 'Em Negociação' else ('🔴 ' if status == 'Perdida' else '⚫ ')}{status}")
+                    with c3: st.write(f"{cor_status} {status}")
                     with c_temp: st.write(temperatura)
                     with c4: st.write(tempo_faltante)
                     with c5: st.write(mrr)
                     with c6: st.write(setup)
+                    with c7:
+                        if status == "Em Negociação":
+                            if st.button("🔄 Renovar", key=f"ren_tab_{linha_real_planilha}", use_container_width=True): st.session_state["renovar_proposta_idx"] = linha_real_planilha; st.session_state["renovar_proposta_dados"] = row.to_dict(); st.rerun()
             else:
                 for idx, row in df_prop.iterrows():
+                    linha_real_planilha = row.name + 2 
                     data_p, cliente, nome_prop = str(row.get('Data_Proposta', '')).split(" ")[0], str(row.get('Nome_Cliente', '')), str(row.get('Nome_Proposta', 'Principal'))
                     status, mrr, setup = str(row.get('Status_Proposta', 'Em Negociação')).strip() or "Em Negociação", str(row.get('Total_MRR', '')), str(row.get('Total_Setup', ''))
                     temperatura = str(row.get('Temperatura', 'Morno 🌤️')).split(" ")[0]
@@ -888,10 +898,15 @@ def tela_principal():
                         except: txt_t = "-"
                         tempo_faltante = f"Prop: {txt_p} | Temp: {txt_t}"
                     
-                    with st.expander(f"{'🟢' if status == 'Em Negociação' else ('🔴' if status == 'Perdida' else '⚫')} {cliente} — {nome_prop} ({data_p})"):
+                    cor_status = "🏆" if status == "Aprovada" else ("🟢" if status == "Em Negociação" else ("🔴" if status == "Perdida" else "⚫"))
+                    
+                    with st.expander(f"{cor_status} {cliente} — {nome_prop} ({data_p})"):
                         st.markdown(f"**Status:** {status} | **Temp:** {temperatura} | **Restante:** {tempo_faltante}<br>**Serviços:** {mrr} | **Setup:** {setup}", unsafe_allow_html=True)
                         itens_crm = extrair_tabela_crm_itens(row.get('Itens_Orcamento', ''))
                         if itens_crm: st.write("---"); st.markdown("📋 **Itens do Projeto para CRM:**"); st.dataframe(itens_crm, use_container_width=True, hide_index=True)
+                        st.write("")
+                        if status == "Em Negociação":
+                            if st.button("🔄 Renovar / Editar Proposta", key=f"ren_tab_{linha_real_planilha}", type="primary", use_container_width=True): st.session_state["renovar_proposta_idx"] = linha_real_planilha; st.session_state["renovar_proposta_dados"] = row.to_dict(); st.rerun()
 
     # --- TELA: MEUS LEADS ---
     elif st.session_state["etapa_atual"] == "meus_leads":
@@ -927,7 +942,9 @@ def tela_principal():
                     if not df_prop.empty and 'Nome_Cliente' in df_prop.columns:
                         prop_cliente = df_prop[df_prop['Nome_Cliente'].astype(str).str.strip() == nome]
                         if not prop_cliente.empty:
-                            status_lead, data_ult_prop = "🔴 Perdida" if str(prop_cliente.iloc[-1].get('Status_Proposta', '')).strip() == "Perdida" else "🟢 Proposta", str(prop_cliente.iloc[-1].get('Data_Proposta', '-')).split(" ")[0]
+                            status_str = str(prop_cliente.iloc[-1].get('Status_Proposta', '')).strip()
+                            status_lead = "🏆 Aprovada" if status_str == "Aprovada" else ("🔴 Perdida" if status_str == "Perdida" else "🟢 Proposta")
+                            data_ult_prop = str(prop_cliente.iloc[-1].get('Data_Proposta', '-')).split(" ")[0]
 
                     c1, c2, c3, c4, c5, c6, c7 = st.columns([4, 3, 4, 2, 2, 2, 3])
                     with c1: 
@@ -954,7 +971,9 @@ def tela_principal():
                     status_lead = "🔵 Lead"
                     if not df_prop.empty and 'Nome_Cliente' in df_prop.columns:
                         prop_cliente = df_prop[df_prop['Nome_Cliente'].astype(str).str.strip() == nome]
-                        if not prop_cliente.empty: status_lead = "🔴 Perdida" if str(prop_cliente.iloc[-1].get('Status_Proposta', '')).strip() == "Perdida" else "🟢 Proposta"
+                        if not prop_cliente.empty: 
+                            status_str = str(prop_cliente.iloc[-1].get('Status_Proposta', '')).strip()
+                            status_lead = "🏆 Aprovada" if status_str == "Aprovada" else ("🔴 Perdida" if status_str == "Perdida" else "🟢 Proposta")
 
                     with st.expander(f"👤 {nome} ({status_lead})"):
                         st.markdown(f"📞 <b>Telefone:</b> {telefone}<br>📍 <b>Endereço:</b> {end_curto}<br>📄 <b>CPF/CNPJ:</b> {str(row.get('CPF_CNPJ', '')).replace('nan', '')} | ✉️ <b>E-mail:</b> {str(row.get('Email_Cliente', '')).replace('nan', '')}<br>👤 <b>Contato:</b> {str(row.get('Contato', '')).replace('nan', '')} | 📅 <b>Cadastro:</b> {data_cad}", unsafe_allow_html=True)
@@ -1027,9 +1046,22 @@ def tela_principal():
         with col_lead_btn:
             if st.button("✏️ Editar Lead", use_container_width=True): st.session_state["etapa_atual"] = "lead"; st.rerun()
         
-        c_nome, c_temp = st.columns([7, 3])
-        nome_proposta = c_nome.text_input("📝 Nome/Referência da Proposta (Ex: Matriz, Filial Centro)", value=st.session_state.get("nome_proposta_atual", ""))
-        temperatura_escolhida = c_temp.selectbox("🌡️ Temperatura Atual:", ["Quente 🔥", "Morno 🌤️", "Frio ❄️"])
+        c_nome, c_temp, c_status = st.columns([4, 3, 3])
+        with c_nome:
+            nome_proposta = st.text_input("📝 Nome/Referência da Proposta (Ex: Matriz, Filial)", value=st.session_state.get("nome_proposta_atual", ""))
+            if not nome_proposta.strip():
+                st.markdown('<p style="color:#d90429; font-size:0.85rem; margin-top:-10px; font-weight:600;">⚠️ Preenchimento obrigatório</p>', unsafe_allow_html=True)
+        
+        with c_temp:
+            temp_opcoes = ["Quente 🔥", "Morno 🌤️", "Frio ❄️"]
+            temp_salva = st.session_state.get("temp_proposta_atual", "Quente 🔥")
+            temperatura_escolhida = st.selectbox("🌡️ Temperatura Atual:", temp_opcoes, index=temp_opcoes.index(temp_salva) if temp_salva in temp_opcoes else 0)
+            
+        with c_status:
+            status_opcoes = ["Em Negociação", "Aprovada"]
+            status_salvo = st.session_state.get("status_proposta_atual", "Em Negociação")
+            status_escolhido = st.selectbox("📊 Status da Proposta:", status_opcoes, index=status_opcoes.index(status_salvo) if status_salvo in status_opcoes else 0)
+        
         st.divider()
 
         try:
@@ -1051,7 +1083,16 @@ def tela_principal():
                     with c_d1: st.number_input(f"Prod (%) [Máx: {lim_p:.0f}%]", min_value=0.0, max_value=float(lim_p), step=0.5, key="desc_prod")
                     with c_d2: st.number_input(f"Alarme (%) [Máx: {lim_a:.0f}%]", min_value=0.0, max_value=float(lim_a), step=0.5, key="desc_alarme")
                     with c_d3: st.number_input(f"Imagem (%) [Máx: {lim_i:.0f}%]", min_value=0.0, max_value=float(lim_i), step=0.5, key="desc_imagem")
-                unidade_selecionada = st.selectbox("🏢 Unidade de Mão de Obra", unidades_disponiveis, key="unidade_mo_selecionada")
+                
+                unidade_selecionada = st.selectbox(
+                    "🏢 Unidade de Mão de Obra", 
+                    unidades_disponiveis, 
+                    index=None,
+                    placeholder="Selecione a unidade de MO",
+                    key="unidade_mo_selecionada"
+                )
+                if not unidade_selecionada:
+                    st.markdown('<p style="color:#d90429; font-size:0.85rem; margin-top:-10px; font-weight:600;">⚠️ Selecione a unidade de MO.</p>', unsafe_allow_html=True)
 
             with col_produtos:
                 st.write("### ➕ Catálogo")
@@ -1060,19 +1101,22 @@ def tela_principal():
                 def desenhar_card_produto(index, linha):
                     is_aberto, nome_item_limpo, cat_limpa_card, cod_kme = st.session_state.get("item_aberto") == index, str(linha.get('Nome_Item', '')).strip(), str(linha.get('Categoria_Receita', '')).strip().lower(), str(linha.get('Codigo_KME', '')).strip()
                     pv_card = converter_para_numero(linha.get('Preco_Venda', 0))
-                    if ("obra" in cat_limpa_card or "instala" in cat_limpa_card) and not df_valor_ponto.empty:
+                    
+                    if unidade_selecionada and ("obra" in cat_limpa_card or "instala" in cat_limpa_card) and not df_valor_ponto.empty:
                         match_mo_card = df_valor_ponto[(df_valor_ponto['Unidade'].astype(str).str.strip() == unidade_selecionada) & (df_valor_ponto['Nome_Item'].astype(str).str.strip() == nome_item_limpo)]
                         if not match_mo_card.empty:
                             pv_card = converter_para_numero(match_mo_card.iloc[0]['Valor_MO'])
                             if str(match_mo_card.iloc[0].get('Codigo', '')).strip() and str(match_mo_card.iloc[0].get('Codigo', '')).strip() != 'nan': cod_kme = str(match_mo_card.iloc[0].get('Codigo', '')).strip()
+                    
                     if st.button(f"{'🔽' if is_aberto else '▶️'} {nome_item_limpo}{f' (Cód: {cod_kme})' if cod_kme else ''}", key=f"btn_acc_{index}", use_container_width=True): st.session_state["item_aberto"] = None if is_aberto else index; st.rerun()
+                    
                     if is_aberto:
                         with st.container():
                             st.caption(f"**Grupo:** {linha.get('Grupo_Itens', 'N/A')} | **Categoria:** {linha.get('Categoria_Receita', '')}")
                             c_qtd, c_add = st.columns([3, 7])
                             qtd = c_qtd.number_input("Qtd", min_value=1, step=1, key=f"qtd_{index}")
                             c_add.write(""); c_add.write("")
-                            if c_add.button("Adicionar ao Orçamento", key=f"btn_add_{index}", type="primary", use_container_width=True):
+                            if c_add.button("Adicionar ao Orçamento", key=f"btn_add_{index}", type="primary", use_container_width=True, disabled=(not unidade_selecionada)):
                                 st.session_state["carrinho"].append({"nome": nome_item_limpo, "codigo": cod_kme, "tipo_sensor": str(linha.get('Tipo_Sensor', '')), "categoria": str(linha.get('Categoria_Receita', '')), "grupo": str(linha.get('Grupo_Itens', '')), "quantidade": qtd, "preco_venda": pv_card, "preco_mrr": converter_para_numero(linha.get('Preco_LOC_36', 0))})
                                 st.session_state["item_aberto"] = None; st.rerun()
                         st.divider()
@@ -1121,14 +1165,17 @@ def tela_principal():
                 for item in st.session_state["carrinho"]:
                     cat_limpa, grp_limpo, cod_item, nome_item_limpo = str(item['categoria']).strip().lower(), str(item.get('grupo', '')).strip().lower(), str(item.get('codigo', '')).strip().lstrip('0'), str(item.get('nome', '')).strip()
                     v_u = item['preco_venda'] if item['preco_venda'] > 0 else item['preco_mrr']
-                    if ("obra" in cat_limpa or "instala" in cat_limpa) and not df_valor_ponto.empty:
+                    
+                    if unidade_selecionada and ("obra" in cat_limpa or "instala" in cat_limpa) and not df_valor_ponto.empty:
                         match_mo = df_valor_ponto[(df_valor_ponto['Unidade'].astype(str).str.strip() == unidade_selecionada) & (df_valor_ponto['Nome_Item'].astype(str).str.strip() == nome_item_limpo)]
                         if not match_mo.empty:
                             v_u = converter_para_numero(match_mo.iloc[0]['Valor_MO'])
                             if str(match_mo.iloc[0].get('Codigo', '')).strip() and str(match_mo.iloc[0].get('Codigo', '')).strip() != 'nan': item['codigo'] = str(match_mo.iloc[0].get('Codigo', '')).strip()
+                            
                     if cod_item in ['254000000042', '254000000377', '25400000042', '25400000377'] and not df_valor_sensor.empty:
                         match = df_valor_sensor[(df_valor_sensor['Codigo_Servico'].astype(str).str.strip().str.lstrip('0') == cod_item) & (pd.to_numeric(df_valor_sensor['Sensor_Abertura'], errors='coerce') == qtd_abertura) & (pd.to_numeric(df_valor_sensor['Sensor_IVP'], errors='coerce') == qtd_ivp)]
                         if not match.empty: v_u = converter_para_numero(match.iloc[0]['Preco'])
+                    
                     item['preco_calculado'] = v_u 
                     if "obra" in cat_limpa or "instala" in cat_limpa: total_mao_obra += (v_u * item['quantidade'])
                     elif "produto" in cat_limpa or "equipamento" in cat_limpa: bruto_produtos += (v_u * item['quantidade'])
@@ -1189,23 +1236,25 @@ def tela_principal():
                 """, unsafe_allow_html=True) 
                 
                 avisos_projeto = validar_inconsistencias_carrinho(st.session_state["carrinho"], df_regras)
+                
                 pode_gravar = True
                 if avisos_projeto:
                     st.warning("⚠️ **AVISOS DE INCONSISTÊNCIA TÉCNICA NO PROJETO:**")
                     for a in avisos_projeto: st.write(f"- {a}")
                     if not st.checkbox("Estou ciente das inconsistências técnicas acima e confirmo o salvamento da proposta assim mesmo.", key="chk_override_regras"): pode_gravar = False
                 
+                if not unidade_selecionada or not nome_proposta.strip():
+                    pode_gravar = False
+                
                 _, col_btn_fechar = st.columns([6, 4])
                 with col_btn_fechar:
-                    if st.button("✅ Fechar Proposta Comercial", type="primary", disabled=not pode_gravar, use_container_width=True):
-                        if not nome_proposta.strip(): st.error("⚠️ Por favor, suba a tela e digite um Nome/Referência para a proposta antes de salvar.")
-                        else:
-                            idx_editando = st.session_state.get("proposta_idx_editando")
-                            if idx_editando: sucesso = atualizar_proposta_modificada(idx_editando, nome_proposta, total_mensal, total_setup, forma_limpa, parcela_escolhida, txt_parcela, st.session_state["carrinho"], st.session_state["desc_prod"], st.session_state["desc_alarme"], st.session_state["desc_imagem"], temperatura_escolhida)
-                            else: sucesso = salvar_proposta(st.session_state["lead_dados"].get("nome", ""), nome_proposta, st.session_state["nome_usuario"], st.session_state["email_usuario"], total_mensal, total_setup, forma_limpa, parcela_escolhida, txt_parcela, st.session_state["carrinho"], st.session_state["desc_prod"], st.session_state["desc_alarme"], st.session_state["desc_imagem"], temperatura_escolhida)
-                            if sucesso:
-                                st.session_state["msg_sucesso"] = f"🎉 Proposta '{nome_proposta}' {'modificada' if idx_editando else 'registrada'} com sucesso!"
-                                st.session_state["gatilho_limpar_tudo"] = True; st.cache_data.clear(); st.rerun()
+                    if st.button("✅ Fechar Proposta Comercial", type="primary", disabled=not pode_gravar, use_container_width=True, help="Preencha o Nome da Proposta e a Unidade de Mão de Obra para habilitar"):
+                        idx_editando = st.session_state.get("proposta_idx_editando")
+                        if idx_editando: sucesso = atualizar_proposta_modificada(idx_editando, nome_proposta, total_mensal, total_setup, forma_limpa, parcela_escolhida, txt_parcela, st.session_state["carrinho"], st.session_state["desc_prod"], st.session_state["desc_alarme"], st.session_state["desc_imagem"], temperatura_escolhida, status_escolhido)
+                        else: sucesso = salvar_proposta(st.session_state["lead_dados"].get("nome", ""), nome_proposta, st.session_state["nome_usuario"], st.session_state["email_usuario"], total_mensal, total_setup, forma_limpa, parcela_escolhida, txt_parcela, st.session_state["carrinho"], st.session_state["desc_prod"], st.session_state["desc_alarme"], st.session_state["desc_imagem"], temperatura_escolhida, status_escolhido)
+                        if sucesso:
+                            st.session_state["msg_sucesso"] = f"🎉 Proposta '{nome_proposta}' {'modificada' if idx_editando else 'registrada'} com sucesso!"
+                            st.session_state["gatilho_limpar_tudo"] = True; st.cache_data.clear(); st.rerun()
             else: st.info("Adicione itens no carrinho para gerar o parcelamento.")
 
         except Exception as e: st.error(f"❌ Erro na conexão: {e}")
