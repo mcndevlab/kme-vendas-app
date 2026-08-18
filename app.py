@@ -6,6 +6,9 @@ import datetime
 import re
 import os
 import pydeck as pdk
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from streamlit_geolocation import streamlit_geolocation
 from geopy.geocoders import Nominatim
 
@@ -20,39 +23,11 @@ st.markdown("""
     <style>
     div[data-testid="stVerticalBlock"] { gap: 0.3rem !important; }
     div[data-testid="stMarkdownContainer"] p { margin-bottom: 0.5rem !important; padding-top: 2px !important; }
-    
-    div.stButton > button {
-        min-height: 2.2rem !important;
-        height: auto !important;
-        padding: 4px 15px !important;
-        text-align: left !important;
-        display: flex !important;
-        justify-content: flex-start !important;
-        align-items: center !important;
-        width: 100% !important;
-    }
-    
-    div.stButton > button * {
-        text-align: left !important;
-        justify-content: flex-start !important;
-    }
-    
-    div.stButton > button[kind="primary"] {
-        justify-content: center !important;
-        text-align: center !important;
-    }
-    div.stButton > button[kind="primary"] * {
-        text-align: center !important;
-        justify-content: center !important;
-    }
-    
-    .card-mobile {
-        background-color: #f8fafc;
-        border-left: 4px solid #0066cc;
-        padding: 12px;
-        border-radius: 6px;
-        margin-bottom: 10px;
-    }
+    div.stButton > button { min-height: 2.2rem !important; height: auto !important; padding: 4px 15px !important; text-align: left !important; display: flex !important; justify-content: flex-start !important; align-items: center !important; width: 100% !important; }
+    div.stButton > button * { text-align: left !important; justify-content: flex-start !important; }
+    div.stButton > button[kind="primary"] { justify-content: center !important; text-align: center !important; }
+    div.stButton > button[kind="primary"] * { text-align: center !important; justify-content: center !important; }
+    .card-mobile { background-color: #f8fafc; border-left: 4px solid #0066cc; padding: 12px; border-radius: 6px; margin-bottom: 10px; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -75,38 +50,32 @@ def conectar_banco():
         credenciais = Credentials.from_service_account_info(dict(st.secrets["gcp_service_account"]), scopes=escopos)
     else:
         credenciais = Credentials.from_service_account_file("credenciais.json", scopes=escopos)
-    cliente = gspread.authorize(credenciais)
-    return cliente.open("BD_Aplicativo_Vendas")
+    return gspread.authorize(credenciais).open("BD_Aplicativo_Vendas")
 
 @st.cache_data(ttl=300)
 def carregar_produtos():
-    aba = conectar_banco().worksheet("Base_Produtos")
-    dados = aba.get_all_values()
-    if len(dados) > 1: return pd.DataFrame(dados[1:], columns=dados[0])
-    return pd.DataFrame()
+    dados = conectar_banco().worksheet("Base_Produtos").get_all_values()
+    return pd.DataFrame(dados[1:], columns=dados[0]) if len(dados) > 1 else pd.DataFrame()
 
 @st.cache_data(ttl=300)
 def carregar_valores_sensores():
     try:
         dados = conectar_banco().worksheet("Valor_Sensor").get_all_values()
-        if len(dados) > 1: return pd.DataFrame(dados[1:], columns=dados[0])
-        return pd.DataFrame()
+        return pd.DataFrame(dados[1:], columns=dados[0]) if len(dados) > 1 else pd.DataFrame()
     except: return pd.DataFrame()
 
 @st.cache_data(ttl=300)
 def carregar_valores_ponto_mo():
     try:
         dados = conectar_banco().worksheet("Valor_Ponto").get_all_values()
-        if len(dados) > 1: return pd.DataFrame(dados[1:], columns=dados[0])
-        return pd.DataFrame()
+        return pd.DataFrame(dados[1:], columns=dados[0]) if len(dados) > 1 else pd.DataFrame()
     except: return pd.DataFrame()
 
 @st.cache_data(ttl=300)
 def carregar_regras_validacao():
     try:
         dados = conectar_banco().worksheet("Regras_Validacao").get_all_values()
-        if len(dados) > 1: return pd.DataFrame(dados[1:], columns=dados[0])
-        return pd.DataFrame()
+        return pd.DataFrame(dados[1:], columns=dados[0]) if len(dados) > 1 else pd.DataFrame()
     except: return pd.DataFrame()
 
 @st.cache_data(ttl=300)
@@ -124,13 +93,11 @@ def carregar_configuracoes():
             for _, linha in df_config.iterrows():
                 param = str(linha.get('Parametro', '')).strip()
                 valor = str(linha.get('Valor', '')).replace("%", "").replace("R$", "").strip()
-                if valor == "": val_num = 0.0
-                else:
+                if valor != "":
                     if "." in valor and "," in valor: valor = valor.replace(".", "").replace(",", ".")
                     elif "," in valor: valor = valor.replace(",", ".")
-                    try: val_num = float(valor)
-                    except: val_num = 0.0
-                config_dict[param] = val_num
+                    try: config_dict[param] = float(valor)
+                    except: pass
     except: pass
     return config_dict
 
@@ -147,8 +114,7 @@ def carregar_todos_leads():
         df = pd.DataFrame(conectar_banco().worksheet("Funil_Vendas").get_all_records())
         if not df.empty:
             df.columns = df.columns.astype(str).str.strip()
-            if 'Email_Vendedor' in df.columns:
-                df['Email_Vendedor'] = df['Email_Vendedor'].astype(str).str.strip().str.lower()
+            if 'Email_Vendedor' in df.columns: df['Email_Vendedor'] = df['Email_Vendedor'].astype(str).str.strip().str.lower()
         return df
     except: return pd.DataFrame()
 
@@ -159,12 +125,10 @@ def carregar_todas_propostas():
         if len(dados) > 1:
             cabecalho = dados[0]
             while len(cabecalho) < 19: cabecalho.append(f"Coluna_{len(cabecalho)+1}")
-            cabecalho[17] = "Temperatura"
-            cabecalho[18] = "Data_Temperatura_Renovada"
+            cabecalho[17], cabecalho[18] = "Temperatura", "Data_Temperatura_Renovada"
             df = pd.DataFrame(dados[1:], columns=cabecalho)
             df.columns = df.columns.astype(str).str.strip()
-            if 'Email_Vendedor' in df.columns:
-                df['Email_Vendedor'] = df['Email_Vendedor'].astype(str).str.strip().str.lower()
+            if 'Email_Vendedor' in df.columns: df['Email_Vendedor'] = df['Email_Vendedor'].astype(str).str.strip().str.lower()
             return df
         return pd.DataFrame()
     except Exception as e: 
@@ -173,16 +137,12 @@ def carregar_todas_propostas():
 @st.cache_data(ttl=300)
 def carregar_meus_leads(email):
     df = carregar_todos_leads()
-    if not df.empty and 'Email_Vendedor' in df.columns:
-        return df[df['Email_Vendedor'] == str(email).strip().lower()]
-    return pd.DataFrame()
+    return df[df['Email_Vendedor'] == str(email).strip().lower()] if not df.empty and 'Email_Vendedor' in df.columns else pd.DataFrame()
 
 @st.cache_data(ttl=300)
 def carregar_minhas_propostas(email):
     df = carregar_todas_propostas()
-    if not df.empty and 'Email_Vendedor' in df.columns:
-        return df[df['Email_Vendedor'] == str(email).strip().lower()]
-    return pd.DataFrame()
+    return df[df['Email_Vendedor'] == str(email).strip().lower()] if not df.empty and 'Email_Vendedor' in df.columns else pd.DataFrame()
 
 # --- FUNÇÕES DE PADRONIZAÇÃO E LIMPEZA ---
 def converter_para_numero(valor):
@@ -199,12 +159,7 @@ def padronizar_nome(texto):
     if not texto: return ""
     excecoes = ['de', 'da', 'do', 'das', 'dos', 'e']
     palavras = str(texto).strip().split()
-    resultado = []
-    for p in palavras:
-        p_lower = p.lower()
-        if p_lower in excecoes: resultado.append(p_lower)
-        else: resultado.append(p_lower.capitalize())
-    return " ".join(resultado)
+    return " ".join([p.lower() if p.lower() in excecoes else p.lower().capitalize() for p in palavras])
 
 def padronizar_telefone(tel):
     if not tel: return ""
@@ -239,22 +194,133 @@ def extrair_tabela_crm_itens(itens_str):
         dados_tabela.append({"Código KME": cod, "Produto / Serviço": nome, "Qtd": qtd, "Valor Unit.": f"R$ {v_u:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".") if v_u > 0 else "-", "Subtotal": f"R$ {subtotal:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".") if subtotal > 0 else "-"})
     return dados_tabela
 
-def validar_inconsistencias_carrinho(carrinho, df_regras):
-    avisos = []
-    if df_regras.empty or not carrinho: return avisos
-    codigos_no_carrinho = [str(item.get('codigo', '')).strip().lstrip('0') for item in carrinho]
-    for _, regra in df_regras.iterrows():
-        gatilho = str(regra.get('Item_Gatilho', '')).strip().lstrip('0')
-        exigidos_str = str(regra.get('Itens_Exigidos', '')).strip()
-        msg = str(regra.get('Mensagem_Aviso', 'Inconsistência detectada.'))
-        tipo_regra = str(regra.get('Tipo_Regra', 'Exigencia')).strip().lower()
-        if gatilho in codigos_no_carrinho:
-            itens_relacionados = [c.strip().lstrip('0') for c in exigidos_str.split(';') if c.strip()]
-            if 'exig' in tipo_regra:
-                if not any(codigo in codigos_no_carrinho for codigo in itens_relacionados): avisos.append(msg)
-            elif 'incompat' in tipo_regra or 'proib' in tipo_regra:
-                if any(codigo in codigos_no_carrinho for codigo in itens_relacionados): avisos.append(msg)
-    return avisos
+def obter_detalhes_split(row_data, df_produtos, df_valor_sensor, df_valor_ponto, unidade_selecionada):
+    itens_str = str(row_data.get('Itens_Orcamento', ''))
+    desc_p, desc_a, desc_i = converter_para_numero(row_data.get('Desc_Prod', '0')) / 100, converter_para_numero(row_data.get('Desc_Alarme', '0')) / 100, converter_para_numero(row_data.get('Desc_Imagem', '0')) / 100
+    bruto_prod, bruto_alarme, bruto_imagem, mao_obra = 0.0, 0.0, 0.0, 0.0
+    itens_parsed, qtd_abertura, qtd_ivp = [], 0, 0
+    
+    for item in itens_str.split(";"):
+        if "x " in item:
+            try:
+                qtd = int(item.strip().split("x ", 1)[0])
+                nome_item = item.strip().split("x ", 1)[1].split("[Cód:")[0].strip() if "[Cód:" in item else item.strip().split("x ", 1)[1].strip()
+            except: qtd, nome_item = 0, ""
+            prod_info = df_produtos[df_produtos['Nome_Item'].astype(str).str.strip() == nome_item]
+            if not prod_info.empty:
+                prod = prod_info.iloc[0]
+                ts = str(prod.get('Tipo_Sensor', '')).strip().upper()
+                if ts == 'ABERTURA': qtd_abertura += qtd
+                elif ts == 'IVP': qtd_ivp += qtd
+                itens_parsed.append({'qtd': qtd, 'prod': prod})
+                
+    for it in itens_parsed:
+        qtd, prod = it['qtd'], it['prod']
+        cat, grupo, cod_item = str(prod.get('Categoria_Receita', '')).strip().lower(), str(prod.get('Grupo_Itens', '')).strip().lower(), str(prod.get('Codigo_KME', '')).strip().lstrip('0')
+        v_u = converter_para_numero(prod.get('Preco_Venda', 0)) if converter_para_numero(prod.get('Preco_Venda', 0)) > 0 else converter_para_numero(prod.get('Preco_LOC_36', 0))
+        
+        if ("obra" in cat or "instala" in cat) and not df_valor_ponto.empty:
+            match_mo = df_valor_ponto[(df_valor_ponto['Unidade'].astype(str).str.strip() == unidade_selecionada) & (df_valor_ponto['Nome_Item'].astype(str).str.strip() == str(prod.get('Nome_Item', '')).strip())]
+            if not match_mo.empty: v_u = converter_para_numero(match_mo.iloc[0]['Valor_MO'])
+            
+        if cod_item in ['254000000042', '254000000377', '25400000042', '25400000377']:
+            if not df_valor_sensor.empty:
+                match = df_valor_sensor[(df_valor_sensor['Codigo_Servico'].astype(str).str.strip().str.lstrip('0') == cod_item) & (pd.to_numeric(df_valor_sensor['Sensor_Abertura'], errors='coerce') == qtd_abertura) & (pd.to_numeric(df_valor_sensor['Sensor_IVP'], errors='coerce') == qtd_ivp)]
+                if not match.empty: v_u = converter_para_numero(match.iloc[0]['Preco'])
+                    
+        if "obra" in cat or "instala" in cat: mao_obra += (v_u * qtd)
+        elif "produto" in cat or "equipamento" in cat: bruto_prod += (v_u * qtd)
+        else:
+            if "imagem" in grupo: bruto_imagem += (v_u * qtd)
+            else: bruto_alarme += (v_u * qtd)
+            
+    liq_prod = bruto_prod * (1 - desc_p)
+    liq_mrr = (bruto_alarme * (1 - desc_a)) + (bruto_imagem * (1 - desc_i))
+
+    mrr_fmt = f"R$ {liq_mrr:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+    eqp_fmt = f"R$ {liq_prod:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+    mo_fmt = f"R$ {mao_obra:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+    
+    return mrr_fmt, eqp_fmt, mo_fmt
+
+# --- MOTOR DE E-MAILS DE APROVAÇÃO ---
+def obter_emails_gestores(df_users, unidade_user, vertical_user):
+    emails = []
+    # Líder da Unidade
+    lideres = df_users[(df_users['Perfil'].astype(str).str.strip() == 'Lider') & (df_users['Unidade'].astype(str).str.strip().str.lower() == str(unidade_user).strip().lower())]
+    emails.extend(lideres['Email_C'].tolist())
+    
+    # Gerente da Vertical
+    if "varejo" in str(vertical_user).lower():
+        gerentes = df_users[df_users['Perfil'].astype(str).str.strip() == 'Gerente_Varejo']
+        emails.extend(gerentes['Email_C'].tolist())
+    elif "condominio" in str(vertical_user).lower():
+        gerentes = df_users[df_users['Perfil'].astype(str).str.strip() == 'Gerente_Condominio']
+        emails.extend(gerentes['Email_C'].tolist())
+        
+    return list(set(emails))
+
+def enviar_email_aprovacao(nome_consultor, unidade, vertical, valor_mrr, valor_equip, valor_mo, emails_destino):
+    try:
+        if "smtp" not in st.secrets:
+            st.info("💡 E-mail de aprovação gerado! (Para envio real, configure as credenciais SMTP no Cloud).")
+            return True
+            
+        remetente = st.secrets["smtp"]["email"]
+        senha = st.secrets["smtp"]["password"]
+        servidor = st.secrets["smtp"]["server"]
+        porta = st.secrets["smtp"]["port"]
+
+        msg = MIMEMultipart()
+        msg['From'] = remetente
+        msg['To'] = ", ".join(emails_destino)
+        msg['Subject'] = "Contrato Aprovado pelo Cliente 🏆"
+
+        html = f"""
+        <div style="font-family: Arial, sans-serif; color: #1e293b;">
+            <h2 style="color: #0066cc;">Nova Aprovação de Contrato!</h2>
+            <p>Olá, Sinalizamos a aprovação do contrato abaixo:</p>
+            <table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse; width: 100%; max-width: 600px;">
+                <tr style="background-color: #f8fafc;">
+                    <td style="width: 40%;"><b>Nome Consultor:</b></td>
+                    <td>{nome_consultor}</td>
+                </tr>
+                <tr>
+                    <td><b>Unidade:</b></td>
+                    <td>{unidade}</td>
+                </tr>
+                <tr style="background-color: #f8fafc;">
+                    <td><b>Segmento:</b></td>
+                    <td>{vertical}</td>
+                </tr>
+                <tr>
+                    <td><b>Valor Mensalidade:</b></td>
+                    <td><span style="color: #059669; font-weight: bold;">{valor_mrr}</span></td>
+                </tr>
+                <tr style="background-color: #f8fafc;">
+                    <td><b>Valor Venda Equipamentos:</b></td>
+                    <td>{valor_equip}</td>
+                </tr>
+                <tr>
+                    <td><b>Valor Mão de Obra:</b></td>
+                    <td>{valor_mo}</td>
+                </tr>
+            </table>
+            <br>
+            <p><i>Obs: Proposta Segue para Análise de Cadastro/Crédito.</i></p>
+        </div>
+        """
+        msg.attach(MIMEText(html, 'html'))
+
+        server = smtplib.SMTP(servidor, porta)
+        server.starttls()
+        server.login(remetente, senha)
+        server.sendmail(remetente, emails_destino, msg.as_string())
+        server.quit()
+        return True
+    except Exception as e:
+        st.error(f"Erro ao disparar email: {e}")
+        return False
 
 # --- FUNÇÕES DE GRAVAÇÃO E ATUALIZAÇÃO ---
 def atualizar_senha_banco(email_usuario, nova_senha):
@@ -546,7 +612,6 @@ def tela_principal():
     cfg = carregar_configuracoes()
     vertical_user = str(st.session_state.get('vertical_usuario', '')).strip().lower()
     
-    # MOTOR DE PRAZOS POR VERTICAL (VENCIMENTO E TEMPERATURA)
     if "varejo" in vertical_user: limite_vencimento, limite_temp = int(cfg.get("Venc_Proposta_Varejo", 10)), int(cfg.get("Temp_Proposta_Varejo", 5))
     elif "condominio" in vertical_user: limite_vencimento, limite_temp = int(cfg.get("Venc_Proposta_Cond", 10)), int(cfg.get("Temp_Proposta_Cond", 5))
     elif "grandes_contas" in vertical_user or "gc" in vertical_user: limite_vencimento, limite_temp = int(cfg.get("Venc_Proposta_GC", 10)), int(cfg.get("Temp_Proposta_GC", 5))
@@ -564,7 +629,6 @@ def tela_principal():
         hoje = datetime.datetime.now()
         for idx, row in df_prop.iterrows():
             status = str(row.get('Status_Proposta', '')).strip()
-            # PROPOSTAS APROVADAS NÃO VENCEM!
             if status in ["Perdida", "Fechada", "Aprovada"]: continue
             
             data_ref_prop_str = str(row.get('Data_Proposta_Renovada', '')).strip() or str(row.get('Data_Proposta', '')).strip()
@@ -620,6 +684,13 @@ def tela_principal():
                     elif acao == "Aprovação da Proposta":
                         if st.button("🏆 Confirmar Aprovação", type="primary", key=f"btn_aprov_{p['idx_planilha']}"):
                             if efetivar_aprovacao(p['idx_planilha']):
+                                mrr_fmt, eqp_fmt, mo_fmt = obter_detalhes_split(p['dados'], df_produtos, df_valor_sensor, df_valor_ponto, st.session_state['unidade_usuario'])
+                                df_us = carregar_usuarios()
+                                df_us['Email_C'] = df_us['Email'].astype(str).str.strip().str.lower()
+                                emails_destino = obter_emails_gestores(df_us, st.session_state['unidade_usuario'], st.session_state['vertical_usuario'])
+                                if emails_destino:
+                                    enviar_email_aprovacao(st.session_state['nome_usuario'], st.session_state['unidade_usuario'], st.session_state['vertical_usuario'], mrr_fmt, eqp_fmt, mo_fmt, emails_destino)
+
                                 st.toast("Proposta Aprovada com sucesso! 🏆"); st.cache_data.clear(); st.rerun()
 
                     elif acao == "Atualizar Temperatura":
@@ -758,7 +829,7 @@ def tela_principal():
             else:
                 df_eq_prop = df_eq_prop.iloc[::-1]
                 hoje = datetime.datetime.now()
-                h1, h_v, h2, h_np, h3, h_temp, h4, h5, h6 = st.columns([2, 2, 3, 2.5, 2, 2, 2.5, 2, 2])
+                h1, h_v, h2, h_np, h3, h_temp, h4, h5, h6 = st.columns([2, 2, 4, 3, 2, 2, 2.5, 2, 2])
                 with h1: st.markdown("**Data**")
                 with h_v: st.markdown("**Vendedor**")
                 with h2: st.markdown("**👤 Cliente (Ver CRM)**")
@@ -798,11 +869,11 @@ def tela_principal():
                     
                     cor_status = "🏆" if status == "Aprovada" else ("🟢" if status == "Em Negociação" else ("🔴" if status == "Perdida" else "⚫"))
                     
-                    c1, c_v, c2, c_np, c3, c_temp, c4, c5, c6 = st.columns([2, 2, 3, 2.5, 2, 2, 2.5, 2, 2])
+                    c1, c_v, c2, c_np, c3, c_temp, c4, c5, c6 = st.columns([2, 2, 4, 3, 2, 2, 2.5, 2, 2])
                     with c1: st.write(data_p)
                     with c_v: st.write(vendedor[:12] + ("..." if len(vendedor) > 12 else ""))
                     with c2: 
-                        with st.expander(f"👤 {cliente[:18]}{'...' if len(cliente) > 18 else ''}"):
+                        with st.expander(f"👤 {cliente[:25]}{'...' if len(cliente) > 25 else ''}"):
                             itens_crm = extrair_tabela_crm_itens(row.get('Itens_Orcamento', ''))
                             if itens_crm: st.dataframe(itens_crm, use_container_width=True, hide_index=True)
                             else: st.info("Sem detalhes avançados.")
@@ -1265,6 +1336,16 @@ def tela_principal():
                         if idx_editando: sucesso = atualizar_proposta_modificada(idx_editando, nome_proposta, total_mensal, total_setup, forma_limpa, parcela_escolhida, txt_parcela, st.session_state["carrinho"], st.session_state["desc_prod"], st.session_state["desc_alarme"], st.session_state["desc_imagem"], temperatura_escolhida, status_escolhido)
                         else: sucesso = salvar_proposta(st.session_state["lead_dados"].get("nome", ""), nome_proposta, st.session_state["nome_usuario"], st.session_state["email_usuario"], total_mensal, total_setup, forma_limpa, parcela_escolhida, txt_parcela, st.session_state["carrinho"], st.session_state["desc_prod"], st.session_state["desc_alarme"], st.session_state["desc_imagem"], temperatura_escolhida, status_escolhido)
                         if sucesso:
+                            # ENVIO DE E-MAIL SE APROVADA NA TELA DO SIMULADOR
+                            if status_escolhido == "Aprovada":
+                                df_us = carregar_usuarios()
+                                df_us['Email_C'] = df_us['Email'].astype(str).str.strip().str.lower()
+                                emails_destino = obter_emails_gestores(df_us, st.session_state['unidade_usuario'], st.session_state['vertical_usuario'])
+                                if emails_destino:
+                                    eqp_fmt = f"R$ {(bruto_produtos * (1 - (st.session_state['desc_prod']/100))):,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+                                    mo_fmt = f"R$ {total_mao_obra:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+                                    enviar_email_aprovacao(st.session_state['nome_usuario'], st.session_state['unidade_usuario'], st.session_state['vertical_usuario'], mrr_formatado, eqp_fmt, mo_fmt, emails_destino)
+                                
                             st.session_state["msg_sucesso"] = f"🎉 Proposta '{nome_proposta}' {'modificada' if idx_editando else 'registrada'} com sucesso!"
                             st.session_state["gatilho_limpar_tudo"] = True; st.cache_data.clear(); st.rerun()
             else: st.info("Adicione itens no carrinho para gerar o parcelamento.")
