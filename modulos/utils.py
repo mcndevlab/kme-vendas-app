@@ -1,1 +1,216 @@
+import pandas as pd
+import re
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import streamlit as st
 
+def converter_para_numero(valor):
+    if isinstance(valor, (int, float)): return float(valor)
+    texto = str(valor).replace("R$", "").replace("%", "").strip()
+    if texto == "": return 0.0
+    if "," in texto:
+        if "." in texto: texto = texto.replace(".", "")
+        texto = texto.replace(",", ".")
+    try: return float(texto)
+    except: return 0.0
+
+def padronizar_nome(texto):
+    if not texto: return ""
+    excecoes = ['de', 'da', 'do', 'das', 'dos', 'e']
+    palavras = str(texto).strip().split()
+    return " ".join([p.lower() if p.lower() in excecoes else p.lower().capitalize() for p in palavras])
+
+def padronizar_telefone(tel):
+    if not tel: return ""
+    num = re.sub(r'\D', '', str(tel))
+    if len(num) == 11: return f"({num[:2]}) {num[2]} {num[3:7]}-{num[7:]}"
+    elif len(num) == 10: return f"({num[:2]}) {num[2:6]}-{num[6:]}"
+    return tel 
+
+def extrair_tabela_crm_itens(itens_str):
+    dados_tabela = []
+    if not itens_str or itens_str == 'nan': return dados_tabela
+    for elem in str(itens_str).split(";"):
+        elem = elem.strip()
+        if not elem: continue
+        cod, qtd, nome, v_u = "-", 1, elem, 0.0
+        if "[Cód:" in elem:
+            try:
+                parte_qtd_nome, rest = elem.split("[Cód:", 1)
+                cod, rest2 = rest.split("]", 1)[0].strip(), rest.split("]", 1)[1]
+                if "x " in parte_qtd_nome:
+                    qtd = int(parte_qtd_nome.split("x ", 1)[0].strip())
+                    nome = parte_qtd_nome.split("x ", 1)[1].strip()
+                else: nome = parte_qtd_nome.strip()
+                if "(R$" in rest2: v_u = converter_para_numero(rest2.split("(R$", 1)[1].replace(")", "").strip())
+            except: pass
+        elif "x " in elem:
+            try:
+                qtd = int(elem.split("x ", 1)[0].strip())
+                nome = elem.split("x ", 1)[1].strip()
+            except: pass
+        subtotal = v_u * qtd
+        dados_tabela.append({"Código KME": cod, "Produto / Serviço": nome, "Qtd": qtd, "Valor Unit.": f"R$ {v_u:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".") if v_u > 0 else "-", "Subtotal": f"R$ {subtotal:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".") if subtotal > 0 else "-"})
+    return dados_tabela
+
+def validar_inconsistencias_carrinho(carrinho, df_regras):
+    avisos = []
+    if df_regras.empty or not carrinho: return avisos
+    codigos_no_carrinho = [str(item.get('codigo', '')).strip().lstrip('0') for item in carrinho]
+    for _, regra in df_regras.iterrows():
+        gatilho = str(regra.get('Item_Gatilho', '')).strip().lstrip('0')
+        exigidos_str = str(regra.get('Itens_Exigidos', '')).strip()
+        msg = str(regra.get('Mensagem_Aviso', 'Inconsistência detectada.'))
+        tipo_regra = str(regra.get('Tipo_Regra', 'Exigencia')).strip().lower()
+        if gatilho in codigos_no_carrinho:
+            itens_relacionados = [c.strip().lstrip('0') for c in exigidos_str.split(';') if c.strip()]
+            if 'exig' in tipo_regra:
+                if not any(codigo in codigos_no_carrinho for codigo in itens_relacionados): avisos.append(msg)
+            elif 'incompat' in tipo_regra or 'proib' in tipo_regra:
+                if any(codigo in codigos_no_carrinho for codigo in itens_relacionados): avisos.append(msg)
+    return avisos
+
+def obter_detalhes_split(row_data, df_produtos, df_valor_sensor, df_valor_ponto, unidade_selecionada):
+    itens_str = str(row_data.get('Itens_Orcamento', ''))
+    desc_p, desc_a, desc_i = converter_para_numero(row_data.get('Desc_Prod', '0')) / 100, converter_para_numero(row_data.get('Desc_Alarme', '0')) / 100, converter_para_numero(row_data.get('Desc_Imagem', '0')) / 100
+    bruto_prod, bruto_alarme, bruto_imagem, mao_obra = 0.0, 0.0, 0.0, 0.0
+    itens_parsed, qtd_abertura, qtd_ivp = [], 0, 0
+    
+    for item in itens_str.split(";"):
+        if "x " in item:
+            try:
+                qtd = int(item.strip().split("x ", 1)[0])
+                nome_item = item.strip().split("x ", 1)[1].split("[Cód:")[0].strip() if "[Cód:" in item else item.strip().split("x ", 1)[1].strip()
+            except: qtd, nome_item = 0, ""
+            prod_info = df_produtos[df_produtos['Nome_Item'].astype(str).str.strip() == nome_item]
+            if not prod_info.empty:
+                prod = prod_info.iloc[0]
+                ts = str(prod.get('Tipo_Sensor', '')).strip().upper()
+                if ts == 'ABERTURA': qtd_abertura += qtd
+                elif ts == 'IVP': qtd_ivp += qtd
+                itens_parsed.append({'qtd': qtd, 'prod': prod})
+                
+    for it in itens_parsed:
+        qtd, prod = it['qtd'], it['prod']
+        cat, grupo, cod_item = str(prod.get('Categoria_Receita', '')).strip().lower(), str(prod.get('Grupo_Itens', '')).strip().lower(), str(prod.get('Codigo_KME', '')).strip().lstrip('0')
+        v_u = converter_para_numero(prod.get('Preco_Venda', 0)) if converter_para_numero(prod.get('Preco_Venda', 0)) > 0 else converter_para_numero(prod.get('Preco_LOC_36', 0))
+        
+        if ("obra" in cat or "instala" in cat) and not df_valor_ponto.empty:
+            match_mo = df_valor_ponto[(df_valor_ponto['Unidade'].astype(str).str.strip() == unidade_selecionada) & (df_valor_ponto['Nome_Item'].astype(str).str.strip() == str(prod.get('Nome_Item', '')).strip())]
+            if not match_mo.empty: v_u = converter_para_numero(match_mo.iloc[0]['Valor_MO'])
+            
+        if cod_item in ['254000000042', '254000000377', '25400000042', '25400000377']:
+            if not df_valor_sensor.empty:
+                match = df_valor_sensor[(df_valor_sensor['Codigo_Servico'].astype(str).str.strip().str.lstrip('0') == cod_item) & (pd.to_numeric(df_valor_sensor['Sensor_Abertura'], errors='coerce') == qtd_abertura) & (pd.to_numeric(df_valor_sensor['Sensor_IVP'], errors='coerce') == qtd_ivp)]
+                if not match.empty: v_u = converter_para_numero(match.iloc[0]['Preco'])
+                    
+        if "obra" in cat or "instala" in cat: mao_obra += (v_u * qtd)
+        elif "produto" in cat or "equipamento" in cat: bruto_prod += (v_u * qtd)
+        else:
+            if "imagem" in grupo: bruto_imagem += (v_u * qtd)
+            else: bruto_alarme += (v_u * qtd)
+            
+    liq_prod = bruto_prod * (1 - desc_p)
+    liq_mrr = (bruto_alarme * (1 - desc_a)) + (bruto_imagem * (1 - desc_i))
+
+    mrr_fmt = f"R$ {liq_mrr:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+    eqp_fmt = f"R$ {liq_prod:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+    mo_fmt = f"R$ {mao_obra:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+    
+    return mrr_fmt, eqp_fmt, mo_fmt
+
+def calcular_novos_valores_proposta(row_data, df_produtos, df_valor_sensor):
+    itens_str = str(row_data.get('Itens_Orcamento', ''))
+    desc_p, desc_a, desc_i = converter_para_numero(row_data.get('Desc_Prod', '0')) / 100, converter_para_numero(row_data.get('Desc_Alarme', '0')) / 100, converter_para_numero(row_data.get('Desc_Imagem', '0')) / 100
+    bruto_prod, bruto_alarme, bruto_imagem, mao_obra = 0.0, 0.0, 0.0, 0.0
+    itens_parsed, qtd_abertura, qtd_ivp = [], 0, 0
+    
+    for item in itens_str.split(";"):
+        if "x " in item:
+            try:
+                qtd = int(item.strip().split("x ", 1)[0])
+                nome_item = item.strip().split("x ", 1)[1].split("[Cód:")[0].strip() if "[Cód:" in item else item.strip().split("x ", 1)[1].strip()
+            except: qtd, nome_item = 0, ""
+            prod_info = df_produtos[df_produtos['Nome_Item'].astype(str).str.strip() == nome_item]
+            if not prod_info.empty:
+                prod = prod_info.iloc[0]
+                ts = str(prod.get('Tipo_Sensor', '')).strip().upper()
+                if ts == 'ABERTURA': qtd_abertura += qtd
+                elif ts == 'IVP': qtd_ivp += qtd
+                itens_parsed.append({'qtd': qtd, 'prod': prod})
+                
+    for it in itens_parsed:
+        qtd, prod = it['qtd'], it['prod']
+        cat, grupo, cod_item = str(prod.get('Categoria_Receita', '')).strip().lower(), str(prod.get('Grupo_Itens', '')).strip().lower(), str(prod.get('Codigo_KME', '')).strip().lstrip('0')
+        v_u = converter_para_numero(prod.get('Preco_Venda', 0)) if converter_para_numero(prod.get('Preco_Venda', 0)) > 0 else converter_para_numero(prod.get('Preco_LOC_36', 0))
+        
+        if cod_item in ['254000000042', '254000000377', '25400000042', '25400000377']:
+            if not df_valor_sensor.empty:
+                match = df_valor_sensor[(df_valor_sensor['Codigo_Servico'].astype(str).str.strip().str.lstrip('0') == cod_item) & (pd.to_numeric(df_valor_sensor['Sensor_Abertura'], errors='coerce') == qtd_abertura) & (pd.to_numeric(df_valor_sensor['Sensor_IVP'], errors='coerce') == qtd_ivp)]
+                if not match.empty: v_u = converter_para_numero(match.iloc[0]['Preco'])
+                    
+        if "obra" in cat or "instala" in cat: mao_obra += (v_u * qtd)
+        elif "produto" in cat or "equipamento" in cat: bruto_prod += (v_u * qtd)
+        else:
+            if "imagem" in grupo: bruto_imagem += (v_u * qtd)
+            else: bruto_alarme += (v_u * qtd)
+            
+    novo_total_mrr, novo_total_setup = (bruto_alarme * (1 - desc_a)) + (bruto_imagem * (1 - desc_i)), (bruto_prod * (1 - desc_p)) + mao_obra
+    return f"R$ {novo_total_mrr:,.2f}".replace(",", "_").replace(".", ",").replace("_", "."), f"R$ {novo_total_setup:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+
+def obter_emails_gestores(df_users, unidade_user, vertical_user):
+    emails = []
+    lideres = df_users[(df_users['Perfil'].astype(str).str.strip() == 'Lider') & (df_users['Unidade'].astype(str).str.strip().str.lower() == str(unidade_user).strip().lower())]
+    emails.extend(lideres['Email_C'].tolist())
+    
+    if "varejo" in str(vertical_user).lower():
+        gerentes = df_users[df_users['Perfil'].astype(str).str.strip() == 'Gerente_Varejo']
+        emails.extend(gerentes['Email_C'].tolist())
+    elif "condominio" in str(vertical_user).lower():
+        gerentes = df_users[df_users['Perfil'].astype(str).str.strip() == 'Gerente_Condominio']
+        emails.extend(gerentes['Email_C'].tolist())
+        
+    return list(set(emails))
+
+def enviar_email_aprovacao(nome_consultor, unidade, vertical, valor_mrr, valor_equip, valor_mo, emails_destino):
+    try:
+        if "smtp" not in st.secrets:
+            st.info("💡 E-mail de aprovação gerado! (Configure SMTP no Cloud para envio real).")
+            return True
+            
+        remetente = st.secrets["smtp"]["email"]
+        senha = st.secrets["smtp"]["password"]
+        servidor = st.secrets["smtp"]["server"]
+        porta = st.secrets["smtp"]["port"]
+
+        msg = MIMEMultipart()
+        msg['From'] = remetente
+        msg['To'] = ", ".join(emails_destino)
+        msg['Subject'] = "Contrato Aprovado pelo Cliente 🏆"
+
+        html = f"""
+        <div style="font-family: Arial, sans-serif; color: #1e293b;">
+            <h2 style="color: #0066cc;">Nova Aprovação de Contrato!</h2>
+            <p>Olá, Sinalizamos a aprovação do contrato abaixo:</p>
+            <table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse; width: 100%; max-width: 600px;">
+                <tr style="background-color: #f8fafc;"><td style="width: 40%;"><b>Nome Consultor:</b></td><td>{nome_consultor}</td></tr>
+                <tr><td><b>Unidade:</b></td><td>{unidade}</td></tr>
+                <tr style="background-color: #f8fafc;"><td><b>Segmento:</b></td><td>{vertical}</td></tr>
+                <tr><td><b>Valor Mensalidade:</b></td><td><span style="color: #059669; font-weight: bold;">{valor_mrr}</span></td></tr>
+                <tr style="background-color: #f8fafc;"><td><b>Valor Venda Equipamentos:</b></td><td>{valor_equip}</td></tr>
+                <tr><td><b>Valor Mão de Obra:</b></td><td>{valor_mo}</td></tr>
+            </table>
+            <br><p><i>Obs: Proposta Segue para Análise de Cadastro/Crédito.</i></p>
+        </div>
+        """
+        msg.attach(MIMEText(html, 'html'))
+        server = smtplib.SMTP(servidor, porta)
+        server.starttls()
+        server.login(remetente, senha)
+        server.sendmail(remetente, emails_destino, msg.as_string())
+        server.quit()
+        return True
+    except Exception as e:
+        st.error(f"Erro ao disparar email: {e}")
+        return False
