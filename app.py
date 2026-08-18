@@ -246,11 +246,9 @@ def obter_detalhes_split(row_data, df_produtos, df_valor_sensor, df_valor_ponto,
 # --- MOTOR DE E-MAILS DE APROVAÇÃO ---
 def obter_emails_gestores(df_users, unidade_user, vertical_user):
     emails = []
-    # Líder da Unidade
     lideres = df_users[(df_users['Perfil'].astype(str).str.strip() == 'Lider') & (df_users['Unidade'].astype(str).str.strip().str.lower() == str(unidade_user).strip().lower())]
     emails.extend(lideres['Email_C'].tolist())
     
-    # Gerente da Vertical
     if "varejo" in str(vertical_user).lower():
         gerentes = df_users[df_users['Perfil'].astype(str).str.strip() == 'Gerente_Varejo']
         emails.extend(gerentes['Email_C'].tolist())
@@ -554,9 +552,10 @@ def aplicar_filtros_gerenciais(df_users, df_all_leads, df_all_prop, perfil, minh
     temp_d = sorted(list(set(temp_d)))
     temp_d = ["Todas"] + temp_d
     
-    filtro_temp = cols[idx].selectbox("Temp. Proposta", temp_d)
-    if filtro_temp != "Todas" and not df_eq_p.empty:
-        df_eq_p = df_eq_p[df_eq_p['Temperatura'].astype(str).str.strip() == filtro_temp]
+    if idx < num_cols:
+        filtro_temp = cols[idx].selectbox("Temp. Proposta", temp_d)
+        if filtro_temp != "Todas" and not df_eq_p.empty:
+            df_eq_p = df_eq_p[df_eq_p['Temperatura'].astype(str).str.strip() == filtro_temp]
 
     mapa_v = dict(zip(df_users['Email_C'], df_users['Nome']))
     return df_eq_l, df_eq_p, mapa_v
@@ -629,6 +628,7 @@ def tela_principal():
         hoje = datetime.datetime.now()
         for idx, row in df_prop.iterrows():
             status = str(row.get('Status_Proposta', '')).strip()
+            # PROPOSTAS APROVADAS NÃO VENCEM!
             if status in ["Perdida", "Fechada", "Aprovada"]: continue
             
             data_ref_prop_str = str(row.get('Data_Proposta_Renovada', '')).strip() or str(row.get('Data_Proposta', '')).strip()
@@ -829,7 +829,7 @@ def tela_principal():
             else:
                 df_eq_prop = df_eq_prop.iloc[::-1]
                 hoje = datetime.datetime.now()
-                h1, h_v, h2, h_np, h3, h_temp, h4, h5, h6 = st.columns([2, 2, 4, 3, 2, 2, 2.5, 2, 2])
+                h1, h_v, h2, h_np, h3, h_temp, h4, h5, h6 = st.columns([2, 2, 3, 2.5, 2, 2, 2.5, 2, 2])
                 with h1: st.markdown("**Data**")
                 with h_v: st.markdown("**Vendedor**")
                 with h2: st.markdown("**👤 Cliente (Ver CRM)**")
@@ -869,11 +869,11 @@ def tela_principal():
                     
                     cor_status = "🏆" if status == "Aprovada" else ("🟢" if status == "Em Negociação" else ("🔴" if status == "Perdida" else "⚫"))
                     
-                    c1, c_v, c2, c_np, c3, c_temp, c4, c5, c6 = st.columns([2, 2, 4, 3, 2, 2, 2.5, 2, 2])
+                    c1, c_v, c2, c_np, c3, c_temp, c4, c5, c6 = st.columns([2, 2, 3, 2.5, 2, 2, 2.5, 2, 2])
                     with c1: st.write(data_p)
                     with c_v: st.write(vendedor[:12] + ("..." if len(vendedor) > 12 else ""))
                     with c2: 
-                        with st.expander(f"👤 {cliente[:25]}{'...' if len(cliente) > 25 else ''}"):
+                        with st.expander(f"👤 {cliente[:18]}{'...' if len(cliente) > 18 else ''}"):
                             itens_crm = extrair_tabela_crm_itens(row.get('Itens_Orcamento', ''))
                             if itens_crm: st.dataframe(itens_crm, use_container_width=True, hide_index=True)
                             else: st.info("Sem detalhes avançados.")
@@ -890,6 +890,81 @@ def tela_principal():
         
         c_tit, c_modo = st.columns([7, 3])
         with c_modo: modo_prop = st.radio("Modo de Exibição:", ["📱 Cartões (Celular)", "🖥️ Tabela Analítica"], key="modo_visao_propostas", horizontal=True)
+
+        if st.session_state.get("renovar_proposta_idx"):
+            idx_planilha = st.session_state["renovar_proposta_idx"]
+            dados_prop = st.session_state["renovar_proposta_dados"]
+            
+            st.info(f"🎯 **Gerenciar Proposta:** {dados_prop.get('Nome_Cliente')} *(Ref: {dados_prop.get('Nome_Proposta', '')})*")
+            
+            c1, c2 = st.columns(2)
+            acao = c1.selectbox("O que aconteceu com esta negociação?", 
+                                ["Selecione...", "Atualizar Temperatura", "Renovar Proposta e Temperatura", "Aprovação da Proposta", "Perda na negociação", "Modificar Proposta (Simulador)"], 
+                                key="acao_prop_manual")
+            
+            motivo, nova_temp = "", ""
+            if acao == "Perda na negociação":
+                motivo = c2.selectbox("Motivo da Perda:", ["Selecione...", "Perdeu Interesse", "Valor Alto", "Fechou com Concorrente", "Tecnologia não atende", "Sem retorno do Cliente"], key="mot_manual")
+            elif acao in ["Atualizar Temperatura", "Renovar Proposta e Temperatura"]:
+                nova_temp = c2.selectbox("Nova Temperatura da Negociação:", ["Quente 🔥", "Morno 🌤️", "Frio ❄️"], key="temp_manual")
+            
+            if acao != "Selecione...":
+                if acao == "Perda na negociação":
+                    if motivo == "Selecione...": st.info("⚠️ Selecione o motivo da perda para confirmar.")
+                    elif st.button("Confirmar Perda", type="primary"):
+                        if efetivar_perda(idx_planilha, motivo):
+                            st.session_state["msg_sucesso"] = "Proposta atualizada para Perdida!"
+                            st.session_state["renovar_proposta_idx"] = None
+                            st.cache_data.clear(); st.rerun()
+                            
+                elif acao == "Aprovação da Proposta":
+                    if st.button("🏆 Confirmar Aprovação", type="primary"):
+                        if efetivar_aprovacao(idx_planilha):
+                            mrr_fmt, eqp_fmt, mo_fmt = obter_detalhes_split(dados_prop, df_produtos, df_valor_sensor, df_valor_ponto, st.session_state['unidade_usuario'])
+                            df_us = carregar_usuarios()
+                            df_us['Email_C'] = df_us['Email'].astype(str).str.strip().str.lower()
+                            emails_destino = obter_emails_gestores(df_us, st.session_state['unidade_usuario'], st.session_state['vertical_usuario'])
+                            if emails_destino:
+                                enviar_email_aprovacao(st.session_state['nome_usuario'], st.session_state['unidade_usuario'], st.session_state['vertical_usuario'], mrr_fmt, eqp_fmt, mo_fmt, emails_destino)
+                            
+                            st.session_state["msg_sucesso"] = "Proposta Aprovada com sucesso! 🏆"
+                            st.session_state["renovar_proposta_idx"] = None
+                            st.cache_data.clear(); st.rerun()
+                            
+                elif acao == "Atualizar Temperatura":
+                    if st.button("Confirmar Nova Temperatura", type="primary"):
+                        if efetivar_atualizacao_temperatura(idx_planilha, nova_temp):
+                            st.session_state["msg_sucesso"] = "Temperatura renovada com sucesso!"
+                            st.session_state["renovar_proposta_idx"] = None
+                            st.cache_data.clear(); st.rerun()
+                            
+                elif acao == "Renovar Proposta e Temperatura":
+                    mrr_n, setup_n = calcular_novos_valores_proposta(dados_prop, df_produtos, df_valor_sensor)
+                    mrr_a, setup_a = dados_prop.get('Total_MRR', ''), dados_prop.get('Total_Setup', '')
+                    pode_renovar = True
+                    
+                    if mrr_n != mrr_a or setup_n != setup_a:
+                        st.warning(f"⚠️ **ATENÇÃO:** Os preços sofrerão reajuste de acordo com a tabela atual!\n\n**Total Serviços:** de {mrr_a} ➡️ **{mrr_n}**\n**Setup:** de {setup_a} ➡️ **{setup_n}**")
+                        if not st.checkbox("Estou ciente e avisarei o cliente da alteração.", key="chk_manual"): pode_renovar = False
+                    else:
+                        st.success("✅ Os valores da proposta continuam os mesmos da tabela atual.")
+                        
+                    if st.button("Confirmar Renovação Completa", type="primary", disabled=not pode_renovar):
+                        if efetivar_renovacao(idx_planilha, mrr_n, setup_n, nova_temp):
+                            st.session_state["msg_sucesso"] = "Renovada com sucesso!"
+                            st.session_state["renovar_proposta_idx"] = None
+                            st.cache_data.clear(); st.rerun()
+                            
+                elif acao == "Modificar Proposta (Simulador)":
+                    if st.button("✏️ Ir para o Simulador", type="primary"):
+                        carregar_proposta_para_simulador(idx_planilha, dados_prop, df_produtos, df_leads)
+                        st.rerun()
+                        
+            if st.button("❌ Cancelar Operação"):
+                st.session_state["renovar_proposta_idx"] = None
+                st.rerun()
+                
+            st.divider()
 
         df_prop = df_prop.iloc[::-1] if not df_prop.empty else pd.DataFrame()
         hoje = datetime.datetime.now()
@@ -990,367 +1065,6 @@ def tela_principal():
                         st.write("")
                         if status == "Em Negociação":
                             if st.button("🔄 Renovar / Editar Proposta", key=f"ren_tab_{linha_real_planilha}", type="primary", use_container_width=True): st.session_state["renovar_proposta_idx"] = linha_real_planilha; st.session_state["renovar_proposta_dados"] = row.to_dict(); st.rerun()
-
-    # --- TELA: MEUS LEADS ---
-    elif st.session_state["etapa_atual"] == "meus_leads":
-        st.header("📋 Meus Leads")
-        df_leads = carregar_meus_leads(st.session_state["email_usuario"])
-        
-        c_busc, c_modo = st.columns([7, 3])
-        with c_modo: modo_lead = st.radio("Modo de Exibição:", ["📱 Cartões (Celular)", "🖥️ Tabela Analítica"], key="modo_visao_leads", horizontal=True)
-
-        if df_leads.empty: st.info("Nenhum lead encontrado no seu funil.")
-        else:
-            with c_busc: busca = st.text_input("🔍 Buscar Lead por Nome ou Telefone:")
-            if busca: df_leads = df_leads[df_leads.astype(str).apply(lambda x: x.str.contains(busca, case=False)).any(axis=1)]
-            df_leads = df_leads.iloc[::-1]
-
-            if "Tabela" in modo_lead:
-                st.write("---")
-                h1, h2, h3, h4, h5, h6, h7 = st.columns([4, 3, 4, 2, 2, 2, 3])
-                with h1: st.markdown("**👤 Nome**"); 
-                with h2: st.markdown("**📞 Telefone**")
-                with h3: st.markdown("**📍 Endereço**"); 
-                with h4: st.markdown("**📅 Cadastro**")
-                with h5: st.markdown("**📊 Status**"); 
-                with h6: st.markdown("**📅 Últ. Prop**")
-                st.write("---")
-                    
-                for idx, row in df_leads.iterrows():
-                    linha_real_planilha = row.name + 2
-                    nome, telefone, data_cad = str(row.get('Nome_Razao', 'Não Informado')).strip(), str(row.get('Telefone', '-')).strip(), str(row.get('Data_Cadastro', '-')).split(" ")[0]
-                    end_curto = f"{str(row.get('Endereco', '')).strip()}, {str(row.get('Numero', '')).strip()} - {str(row.get('Cidade', '')).strip()}".replace("nan", "").strip(" ,-") or "-"
-                    
-                    status_lead, data_ult_prop = "🔵 Lead", "-"
-                    if not df_prop.empty and 'Nome_Cliente' in df_prop.columns:
-                        prop_cliente = df_prop[df_prop['Nome_Cliente'].astype(str).str.strip() == nome]
-                        if not prop_cliente.empty:
-                            status_str = str(prop_cliente.iloc[-1].get('Status_Proposta', '')).strip()
-                            status_lead = "🏆 Aprovada" if status_str == "Aprovada" else ("🔴 Perdida" if status_str == "Perdida" else "🟢 Proposta")
-                            data_ult_prop = str(prop_cliente.iloc[-1].get('Data_Proposta', '-')).split(" ")[0]
-
-                    c1, c2, c3, c4, c5, c6, c7 = st.columns([4, 3, 4, 2, 2, 2, 3])
-                    with c1: 
-                        with st.expander(f"👤 {nome[:25]}{'...' if len(nome)>25 else ''}"):
-                            st.markdown(f"<span style='font-size: 0.85rem; color: #475569;'><b>CPF/CNPJ:</b> {str(row.get('CPF_CNPJ', '')).replace('nan', '')}<br><b>E-mail:</b> {str(row.get('Email_Cliente', '')).replace('nan', '')}<br><b>Contato:</b> {str(row.get('Contato', '')).replace('nan', '')}</span>", unsafe_allow_html=True)
-                    with c2: st.markdown(f"<div style='margin-top: 0.4rem;'>{telefone}</div>", unsafe_allow_html=True)
-                    with c3: st.markdown(f"<div style='margin-top: 0.4rem;'>{end_curto[:30]}{'...' if len(end_curto)>30 else ''}</div>", unsafe_allow_html=True)
-                    with c4: st.markdown(f"<div style='margin-top: 0.4rem;'>{data_cad}</div>", unsafe_allow_html=True)
-                    with c5: st.markdown(f"<div style='margin-top: 0.4rem;'>{status_lead}</div>", unsafe_allow_html=True)
-                    with c6: st.markdown(f"<div style='margin-top: 0.4rem;'>{data_ult_prop}</div>", unsafe_allow_html=True)
-                    with c7:
-                        btn1, btn2 = st.columns([7, 3])
-                        with btn1:
-                            if st.button("Proposta", key=f"btn_lead_{idx}", use_container_width=True): st.session_state.update({"lead_dados": {"data_cadastro": data_cad, "nome": nome, "cpf_cnpj": str(row.get('CPF_CNPJ', '')).replace('nan', ''), "endereco": str(row.get('Endereco', '')).replace('nan', ''), "numero": str(row.get('Numero', '')).replace('nan', ''), "cidade": str(row.get('Cidade', '')).replace('nan', ''), "estado": str(row.get("Estado", "")).replace('nan', ''), "telefone": telefone, "email_cliente": str(row.get('Email_Cliente', '')).replace('nan', ''), "contato": str(row.get('Contato', '')).replace('nan', ''), "gps": str(row.get("Coordenadas_GPS", "")).replace('nan', '')}, "lead_salvo": True, "gatilho_limpar_carrinho": True, "etapa_atual": "simulador", "editando_lead_idx": linha_real_planilha}); st.rerun()
-                        with btn2:
-                            if st.button("✏️", help="Editar", key=f"btn_edit_lead_{idx}", use_container_width=True): st.session_state.update({"lead_dados": {"data_cadastro": data_cad, "nome": nome, "cpf_cnpj": str(row.get('CPF_CNPJ', '')).replace('nan', ''), "endereco": str(row.get('Endereco', '')).replace('nan', ''), "numero": str(row.get('Numero', '')).replace('nan', ''), "cidade": str(row.get('Cidade', '')).replace('nan', ''), "estado": str(row.get("Estado", "")).replace('nan', ''), "telefone": telefone, "email_cliente": str(row.get('Email_Cliente', '')).replace('nan', ''), "contato": str(row.get('Contato', '')).replace('nan', ''), "gps": str(row.get("Coordenadas_GPS", "")).replace('nan', '')}, "lead_salvo": True, "etapa_atual": "lead", "editando_lead_idx": linha_real_planilha}); st.rerun()
-
-            else:
-                for idx, row in df_leads.iterrows():
-                    linha_real_planilha = row.name + 2
-                    nome, telefone, data_cad = str(row.get('Nome_Razao', 'Não Informado')).strip(), str(row.get('Telefone', '-')).strip(), str(row.get('Data_Cadastro', '-')).split(" ")[0]
-                    end_curto = f"{str(row.get('Endereco', '')).strip()}, {str(row.get('Numero', '')).strip()} - {str(row.get('Cidade', '')).strip()}".replace("nan", "").strip(" ,-") or "-"
-                    
-                    status_lead = "🔵 Lead"
-                    if not df_prop.empty and 'Nome_Cliente' in df_prop.columns:
-                        prop_cliente = df_prop[df_prop['Nome_Cliente'].astype(str).str.strip() == nome]
-                        if not prop_cliente.empty: 
-                            status_str = str(prop_cliente.iloc[-1].get('Status_Proposta', '')).strip()
-                            status_lead = "🏆 Aprovada" if status_str == "Aprovada" else ("🔴 Perdida" if status_str == "Perdida" else "🟢 Proposta")
-
-                    with st.expander(f"👤 {nome} ({status_lead})"):
-                        st.markdown(f"📞 <b>Telefone:</b> {telefone}<br>📍 <b>Endereço:</b> {end_curto}<br>📄 <b>CPF/CNPJ:</b> {str(row.get('CPF_CNPJ', '')).replace('nan', '')} | ✉️ <b>E-mail:</b> {str(row.get('Email_Cliente', '')).replace('nan', '')}<br>👤 <b>Contato:</b> {str(row.get('Contato', '')).replace('nan', '')} | 📅 <b>Cadastro:</b> {data_cad}", unsafe_allow_html=True)
-                        st.write("")
-                        c_b1, c_b2 = st.columns([7, 3])
-                        with c_b1:
-                            if st.button("➕ Criar Proposta", key=f"btn_lead_{idx}", type="primary", use_container_width=True): st.session_state.update({"lead_dados": {"data_cadastro": data_cad, "nome": nome, "cpf_cnpj": str(row.get('CPF_CNPJ', '')).replace('nan', ''), "endereco": str(row.get('Endereco', '')).replace('nan', ''), "numero": str(row.get('Numero', '')).replace('nan', ''), "cidade": str(row.get('Cidade', '')).replace('nan', ''), "estado": str(row.get("Estado", "")).replace('nan', ''), "telefone": telefone, "email_cliente": str(row.get('Email_Cliente', '')).replace('nan', ''), "contato": str(row.get('Contato', '')).replace('nan', ''), "gps": str(row.get("Coordenadas_GPS", "")).replace('nan', '')}, "lead_salvo": True, "gatilho_limpar_carrinho": True, "etapa_atual": "simulador", "editando_lead_idx": linha_real_planilha}); st.rerun()
-                        with c_b2:
-                            if st.button("✏️ Editar", key=f"btn_edit_lead_{idx}", use_container_width=True): st.session_state.update({"lead_dados": {"data_cadastro": data_cad, "nome": nome, "cpf_cnpj": str(row.get('CPF_CNPJ', '')).replace('nan', ''), "endereco": str(row.get('Endereco', '')).replace('nan', ''), "numero": str(row.get('Numero', '')).replace('nan', ''), "cidade": str(row.get('Cidade', '')).replace('nan', ''), "estado": str(row.get("Estado", "")).replace('nan', ''), "telefone": telefone, "email_cliente": str(row.get('Email_Cliente', '')).replace('nan', ''), "contato": str(row.get('Contato', '')).replace('nan', ''), "gps": str(row.get("Coordenadas_GPS", "")).replace('nan', '')}, "lead_salvo": True, "etapa_atual": "lead", "editando_lead_idx": linha_real_planilha}); st.rerun()
-
-    # --- TELA: LEAD ---
-    elif st.session_state["etapa_atual"] == "lead":
-        idx_editando_lead = st.session_state.get("editando_lead_idx")
-        st.title("👤 Atualizar Dados do Lead" if idx_editando_lead else "👤 1. Cadastro de Novo Lead")
-        
-        st.write("📍 **Preencher Localização**")
-        st.caption("Clique no botão abaixo para registrar sua coordenada atual.")
-        
-        loc = streamlit_geolocation()
-        gps_audit = ""
-        if loc and loc.get('latitude'):
-            gps_audit = f"{loc['latitude']}, {loc['longitude']}"
-            if st.session_state.get("ultimo_gps_capturado") != gps_audit:
-                st.session_state["ultimo_gps_capturado"] = gps_audit
-                try:
-                    location = Nominatim(user_agent="kme_vendas_app_v1").reverse(f"{loc['latitude']}, {loc['longitude']}")
-                    if location and location.raw.get('address'):
-                        addr = location.raw['address']
-                        mapa_estados = {"Acre": "AC", "Alagoas": "AL", "Amapá": "AP", "Amazonas": "AM", "Bahia": "BA", "Ceará": "CE", "Distrito Federal": "DF", "Espírito Santo": "ES", "Goiás": "GO", "Maranhão": "MA", "Mato Grosso": "MT", "Mato Grosso do Sul": "MS", "Minas Gerais": "MG", "Pará": "PA", "Paraíba": "PB", "Paraná": "PR", "Pernambuco": "PE", "Piauí": "PI", "Rio de Janeiro": "RJ", "Rio Grande do Norte": "RN", "Rio Grande do Sul": "RS", "Rondônia": "RO", "Roraima": "RR", "Santa Catarina": "SC", "São Paulo": "SP", "Sergipe": "SE", "Tocantins": "TO"}
-                        if addr.get('road', ''): st.session_state["lead_dados"]["endereco"] = addr.get('road', '')
-                        if addr.get('house_number', ''): st.session_state["lead_dados"]["numero"] = addr.get('house_number', '')
-                        if addr.get('city', addr.get('town', addr.get('village', addr.get('municipality', '')))): st.session_state["lead_dados"]["cidade"] = addr.get('city', addr.get('town', addr.get('village', addr.get('municipality', ''))))
-                        st.session_state["lead_dados"]["estado"] = mapa_estados.get(addr.get('state', ''), "SC")
-                except: pass 
-            st.success("✅ Localização capturada!")
-
-        ld = st.session_state["lead_dados"]
-        with st.form("form_lead"):
-            c1, c2 = st.columns(2)
-            nome, cpf_cnpj = c1.text_input("Nome / Razão Social *", value=ld.get("nome", "")), c2.text_input("CPF / CNPJ", value=ld.get("cpf_cnpj", ""))
-            c3, c4, c5 = st.columns([4, 2, 3])
-            endereco, numero, telefone = c3.text_input("Endereço *", value=ld.get("endereco", "")), c4.text_input("Número *", value=ld.get("numero", "")), c5.text_input("Telefone *", value=ld.get("telefone", ""), max_chars=15)
-            c6, c7, c8 = st.columns([3, 1, 4])
-            cidade = c6.text_input("Cidade", value=ld.get("cidade", ""))
-            estados_br = ["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"]
-            estado = c7.selectbox("Estado", estados_br, index=estados_br.index(ld.get("estado", "SC").upper()) if ld.get("estado", "SC").upper() in estados_br else estados_br.index("SC"))
-            contato, email_cliente = c8.text_input("Nome do Contato", value=ld.get("contato", "")), st.text_input("✉️ E-mail do Cliente", value=ld.get("email_cliente", ""))
-            gps_final = gps_audit if gps_audit else ld.get("gps", "")
-            
-            if st.form_submit_button("Atualizar Dados do Lead ➡️" if idx_editando_lead else "Salvar Lead e Iniciar Proposta ➡️", type="primary", use_container_width=True):
-                tel_numeros, email_valido = re.sub(r'\D', '', telefone), False if email_cliente and not re.match(r'^[\w\.-]+@[\w\.-]+\.\w+$', email_cliente) else True
-                if not nome or not endereco or not numero or not telefone: st.error("⚠️ Atenção: Preencha todos os campos marcados com (*).")
-                elif len(tel_numeros) < 10 or len(tel_numeros) > 11: st.error("⚠️ Atenção: O Telefone deve conter o DDD + Número válido (10 ou 11 dígitos).")
-                elif not email_valido: st.error("⚠️ Atenção: O E-mail digitado é inválido.")
-                elif not (gps_audit if gps_audit else ld.get("gps", "")) and not idx_editando_lead: st.error("⚠️ Atenção: Valide sua localização clicando no ícone de GPS.")
-                else:
-                    st.session_state["lead_dados"].update({"nome": padronizar_nome(nome), "cpf_cnpj": cpf_cnpj, "endereco": padronizar_nome(endereco), "numero": numero, "cidade": padronizar_nome(cidade), "estado": estado, "telefone": padronizar_telefone(telefone), "contato": padronizar_nome(contato), "email_cliente": email_cliente, "gps": gps_audit if gps_audit else ld.get("gps", "")})
-                    if idx_editando_lead:
-                        if atualizar_lead(idx_editando_lead, st.session_state["lead_dados"]): st.toast("Lead atualizado!"); st.cache_data.clear(); st.session_state["etapa_atual"] = "meus_leads"; st.rerun()
-                    else:
-                        novo_idx = salvar_lead(st.session_state["lead_dados"], st.session_state["nome_usuario"], st.session_state["email_usuario"])
-                        if novo_idx: st.session_state.update({"lead_salvo": True, "etapa_atual": "simulador", "editando_lead_idx": novo_idx}); st.toast("Lead salvo!"); st.cache_data.clear(); st.rerun()
-
-    # --- TELA: SIMULADOR ---
-    elif st.session_state["etapa_atual"] == "simulador":
-        st.title("🛒 2. Simulador de Vendas")
-        if st.session_state.get("proposta_idx_editando"): st.warning("✏️ **Modo de Edição Ativo:** Você está modificando uma proposta já enviada.")
-        col_lead_info, col_lead_btn = st.columns([8, 2])
-        with col_lead_info: st.info(f"👤 **Cliente Ativo:** {st.session_state['lead_dados'].get('nome', '')} | 📞 {st.session_state['lead_dados'].get('telefone', '')}")
-        with col_lead_btn:
-            if st.button("✏️ Editar Lead", use_container_width=True): st.session_state["etapa_atual"] = "lead"; st.rerun()
-        
-        c_nome, c_temp, c_status = st.columns([4, 3, 3])
-        with c_nome:
-            nome_proposta = st.text_input("📝 Nome/Referência da Proposta (Ex: Matriz, Filial)", value=st.session_state.get("nome_proposta_atual", ""))
-            if not nome_proposta.strip():
-                st.markdown('<p style="color:#d90429; font-size:0.85rem; margin-top:-10px; font-weight:600;">⚠️ Preenchimento obrigatório</p>', unsafe_allow_html=True)
-        
-        with c_temp:
-            temp_opcoes = ["Quente 🔥", "Morno 🌤️", "Frio ❄️"]
-            temp_salva = st.session_state.get("temp_proposta_atual", "Quente 🔥")
-            temperatura_escolhida = st.selectbox("🌡️ Temperatura Atual:", temp_opcoes, index=temp_opcoes.index(temp_salva) if temp_salva in temp_opcoes else 0)
-            
-        with c_status:
-            status_opcoes = ["Em Negociação", "Aprovada"]
-            status_salvo = st.session_state.get("status_proposta_atual", "Em Negociação")
-            status_escolhido = st.selectbox("📊 Status da Proposta:", status_opcoes, index=status_opcoes.index(status_salvo) if status_salvo in status_opcoes else 0)
-        
-        st.divider()
-
-        try:
-            df_produtos, df_valor_sensor, df_valor_ponto, df_regras, cfg = carregar_produtos(), carregar_valores_sensores(), carregar_valores_ponto_mo(), carregar_regras_validacao(), carregar_configuracoes()
-            taxa_bruta = cfg.get("Taxa_Juros_Mensal", 0.022)
-            taxa_juros = taxa_bruta / 100 if (taxa_bruta >= 10 and taxa_bruta/10 < 1) else (taxa_bruta/100 if taxa_bruta > 1 else taxa_bruta)
-            max_sj, max_bol, max_cc = int(cfg.get("Max_Parcelas_Sem_Juros", 3)), int(cfg.get("Max_Parcelas_Boleto", 18)), int(cfg.get("Max_Parcelas_Cartao", 24))
-            lim_p, lim_a, lim_i = cfg.get("Desc_Max_Produtos", 15.0), cfg.get("Desc_Max_Alarme", 15.0), cfg.get("Desc_Max_Imagem", 30.0)
-            unidades_disponiveis = sorted(list(set(df_valor_ponto['Unidade'].dropna().astype(str).str.strip()))) if not df_valor_ponto.empty and 'Unidade' in df_valor_ponto.columns else ["Padrão"]
-
-            col_produtos, col_resumo = st.columns([5, 5])
-            with col_resumo:
-                st.write("### 📊 Resumo Financeiro")
-                if st.session_state["desc_prod"] > float(lim_p): st.session_state["desc_prod"] = float(lim_p)
-                if st.session_state["desc_alarme"] > float(lim_a): st.session_state["desc_alarme"] = float(lim_a)
-                if st.session_state["desc_imagem"] > float(lim_i): st.session_state["desc_imagem"] = float(lim_i)
-                with st.expander("🏷️ Aplicar Descontos por Categoria"):
-                    c_d1, c_d2, c_d3 = st.columns(3)
-                    with c_d1: st.number_input(f"Prod (%) [Máx: {lim_p:.0f}%]", min_value=0.0, max_value=float(lim_p), step=0.5, key="desc_prod")
-                    with c_d2: st.number_input(f"Alarme (%) [Máx: {lim_a:.0f}%]", min_value=0.0, max_value=float(lim_a), step=0.5, key="desc_alarme")
-                    with c_d3: st.number_input(f"Imagem (%) [Máx: {lim_i:.0f}%]", min_value=0.0, max_value=float(lim_i), step=0.5, key="desc_imagem")
-                
-                unidade_selecionada = st.selectbox(
-                    "🏢 Unidade de Mão de Obra", 
-                    unidades_disponiveis, 
-                    index=None,
-                    placeholder="Selecione a unidade de MO",
-                    key="unidade_mo_selecionada"
-                )
-                if not unidade_selecionada:
-                    st.markdown('<p style="color:#d90429; font-size:0.85rem; margin-top:-10px; font-weight:600;">⚠️ Selecione a unidade de MO.</p>', unsafe_allow_html=True)
-
-            with col_produtos:
-                st.write("### ➕ Catálogo")
-                aba_servicos, aba_produtos, aba_mao_obra = st.tabs(["🔄 Serviços", "📦 Produtos", "🛠️ Mão de Obra"])
-                
-                def desenhar_card_produto(index, linha):
-                    is_aberto, nome_item_limpo, cat_limpa_card, cod_kme = st.session_state.get("item_aberto") == index, str(linha.get('Nome_Item', '')).strip(), str(linha.get('Categoria_Receita', '')).strip().lower(), str(linha.get('Codigo_KME', '')).strip()
-                    pv_card = converter_para_numero(linha.get('Preco_Venda', 0))
-                    
-                    if unidade_selecionada and ("obra" in cat_limpa_card or "instala" in cat_limpa_card) and not df_valor_ponto.empty:
-                        match_mo_card = df_valor_ponto[(df_valor_ponto['Unidade'].astype(str).str.strip() == unidade_selecionada) & (df_valor_ponto['Nome_Item'].astype(str).str.strip() == nome_item_limpo)]
-                        if not match_mo_card.empty:
-                            pv_card = converter_para_numero(match_mo_card.iloc[0]['Valor_MO'])
-                            if str(match_mo_card.iloc[0].get('Codigo', '')).strip() and str(match_mo_card.iloc[0].get('Codigo', '')).strip() != 'nan': cod_kme = str(match_mo_card.iloc[0].get('Codigo', '')).strip()
-                    
-                    if st.button(f"{'🔽' if is_aberto else '▶️'} {nome_item_limpo}{f' (Cód: {cod_kme})' if cod_kme else ''}", key=f"btn_acc_{index}", use_container_width=True): st.session_state["item_aberto"] = None if is_aberto else index; st.rerun()
-                    
-                    if is_aberto:
-                        with st.container():
-                            st.caption(f"**Grupo:** {linha.get('Grupo_Itens', 'N/A')} | **Categoria:** {linha.get('Categoria_Receita', '')}")
-                            c_qtd, c_add = st.columns([3, 7])
-                            qtd = c_qtd.number_input("Qtd", min_value=1, step=1, key=f"qtd_{index}")
-                            c_add.write(""); c_add.write("")
-                            if c_add.button("Adicionar ao Orçamento", key=f"btn_add_{index}", type="primary", use_container_width=True, disabled=(not unidade_selecionada)):
-                                st.session_state["carrinho"].append({"nome": nome_item_limpo, "codigo": cod_kme, "tipo_sensor": str(linha.get('Tipo_Sensor', '')), "categoria": str(linha.get('Categoria_Receita', '')), "grupo": str(linha.get('Grupo_Itens', '')), "quantidade": qtd, "preco_venda": pv_card, "preco_mrr": converter_para_numero(linha.get('Preco_LOC_36', 0))})
-                                st.session_state["item_aberto"] = None; st.rerun()
-                        st.divider()
-
-                def preencher_aba_grupo(df, nome_grupo):
-                    itens = df[df['Grupo_Itens'].fillna("").astype(str).str.strip().str.lower() == nome_grupo.lower()]
-                    with st.container(height=500):
-                        if itens.empty: st.info(f"Nenhum item em '{nome_grupo}'.")
-                        else:
-                            for index, linha in itens.iterrows(): desenhar_card_produto(index, linha)
-
-                with aba_servicos:
-                    grupos_serv = ["Servico Alarme", "Servico Imagem"]
-                    sub_abas_serv = st.tabs(grupos_serv + ["Outros"])
-                    for i, nome in enumerate(grupos_serv):
-                        with sub_abas_serv[i]: preencher_aba_grupo(df_produtos, nome)
-                    with sub_abas_serv[-1]:
-                        outros_serv = df_produtos[df_produtos['Categoria_Receita'].fillna("").astype(str).str.lower().str.contains("mensal|loca|servi|seguro") & ~df_produtos['Grupo_Itens'].fillna("").astype(str).str.strip().str.lower().isin([g.lower() for g in grupos_serv])]
-                        with st.container(height=500):
-                            if not outros_serv.empty:
-                                for index, linha in outros_serv.iterrows(): desenhar_card_produto(index, linha)
-
-                with aba_produtos:
-                    grupos_prod = ["Smart Alarme", "JFL 8W", "AXPRO", "Detect IA", "CFTV"]
-                    sub_abas_prod = st.tabs(grupos_prod + ["Outros"])
-                    for i, nome in enumerate(grupos_prod):
-                        with sub_abas_prod[i]: preencher_aba_grupo(df_produtos, nome)
-                    with sub_abas_prod[-1]:
-                        outros_prod = df_produtos[~df_produtos['Categoria_Receita'].fillna("").astype(str).str.lower().str.contains("mensal|loca|servi|seguro|obra|instala") & ~df_produtos['Grupo_Itens'].fillna("").astype(str).str.strip().str.lower().isin([g.lower() for g in grupos_prod])]
-                        with st.container(height=500):
-                            if not outros_prod.empty:
-                                for index, linha in outros_prod.iterrows(): desenhar_card_produto(index, linha)
-
-                with aba_mao_obra:
-                    st.write("#### 🔹 Instalação e Configuração")
-                    itens_mo = df_produtos[df_produtos['Categoria_Receita'].fillna("").astype(str).str.lower().str.contains("obra|instala")]
-                    with st.container(height=500):
-                        if not itens_mo.empty:
-                            for index, linha in itens_mo.iterrows(): desenhar_card_produto(index, linha)
-
-            with col_resumo:
-                bruto_alarme, bruto_imagem, bruto_produtos, total_mao_obra = 0.0, 0.0, 0.0, 0.0
-                qtd_abertura = sum(it['quantidade'] for it in st.session_state["carrinho"] if str(it.get('tipo_sensor', '')).strip().upper() == 'ABERTURA')
-                qtd_ivp = sum(it['quantidade'] for it in st.session_state["carrinho"] if str(it.get('tipo_sensor', '')).strip().upper() == 'IVP')
-                
-                for item in st.session_state["carrinho"]:
-                    cat_limpa, grp_limpo, cod_item, nome_item_limpo = str(item['categoria']).strip().lower(), str(item.get('grupo', '')).strip().lower(), str(item.get('codigo', '')).strip().lstrip('0'), str(item.get('nome', '')).strip()
-                    v_u = item['preco_venda'] if item['preco_venda'] > 0 else item['preco_mrr']
-                    
-                    if unidade_selecionada and ("obra" in cat_limpa or "instala" in cat_limpa) and not df_valor_ponto.empty:
-                        match_mo = df_valor_ponto[(df_valor_ponto['Unidade'].astype(str).str.strip() == unidade_selecionada) & (df_valor_ponto['Nome_Item'].astype(str).str.strip() == nome_item_limpo)]
-                        if not match_mo.empty:
-                            v_u = converter_para_numero(match_mo.iloc[0]['Valor_MO'])
-                            if str(match_mo.iloc[0].get('Codigo', '')).strip() and str(match_mo.iloc[0].get('Codigo', '')).strip() != 'nan': item['codigo'] = str(match_mo.iloc[0].get('Codigo', '')).strip()
-                            
-                    if cod_item in ['254000000042', '254000000377', '25400000042', '25400000377'] and not df_valor_sensor.empty:
-                        match = df_valor_sensor[(df_valor_sensor['Codigo_Servico'].astype(str).str.strip().str.lstrip('0') == cod_item) & (pd.to_numeric(df_valor_sensor['Sensor_Abertura'], errors='coerce') == qtd_abertura) & (pd.to_numeric(df_valor_sensor['Sensor_IVP'], errors='coerce') == qtd_ivp)]
-                        if not match.empty: v_u = converter_para_numero(match.iloc[0]['Preco'])
-                    
-                    item['preco_calculado'] = v_u 
-                    if "obra" in cat_limpa or "instala" in cat_limpa: total_mao_obra += (v_u * item['quantidade'])
-                    elif "produto" in cat_limpa or "equipamento" in cat_limpa: bruto_produtos += (v_u * item['quantidade'])
-                    else:
-                        if "imagem" in grp_limpo: bruto_imagem += (v_u * item['quantidade'])
-                        else: bruto_alarme += (v_u * item['quantidade'])
-
-                liq_produtos = bruto_produtos * (1 - (st.session_state["desc_prod"] / 100))
-                liq_alarme = bruto_alarme * (1 - (st.session_state["desc_alarme"] / 100))
-                liq_imagem = bruto_imagem * (1 - (st.session_state["desc_imagem"] / 100))
-                total_mensal = liq_alarme + liq_imagem
-
-                st.metric("🔄 Total Serviços", f"R$ {total_mensal:,.2f}".replace(",", "_").replace(".", ",").replace("_", "."))
-                st.metric("📦 Equipamentos (Setup)", f"R$ {liq_produtos:,.2f}".replace(",", "_").replace(".", ",").replace("_", "."))
-                st.metric("🛠️ Mão de Obra", f"R$ {total_mao_obra:,.2f}".replace(",", "_").replace(".", ",").replace("_", "."))
-                st.divider()
-                st.write("#### 🛒 Seu Orçamento")
-                with st.container(height=350):
-                    if len(st.session_state["carrinho"]) == 0: st.info("O carrinho está vazio.")
-                    else:
-                        for i, item in enumerate(st.session_state["carrinho"]):
-                            v_u = item.get('preco_calculado', item['preco_venda'] if item['preco_venda'] > 0 else item['preco_mrr'])
-                            c_txt, c_btn = st.columns([8, 2])
-                            with c_txt: st.write(f"- {item['quantidade']}x {item['nome']} **(R$ {v_u:,.2f})**")
-                            with c_btn:
-                                if st.button("❌", key=f"del_{i}"): st.session_state["carrinho"].pop(i); st.rerun()
-                if len(st.session_state["carrinho"]) > 0:
-                    if st.button("🗑️ Limpar Carrinho", use_container_width=True): st.session_state["gatilho_limpar_carrinho"] = True; st.rerun()
-
-            st.divider()
-            st.header("💳 Tabela de Parcelamento (Setup Inicial)")
-            total_setup = liq_produtos + total_mao_obra
-            
-            if total_setup > 0:
-                col_pag1, col_pag2 = st.columns([4, 6])
-                with col_pag1: forma_pagamento = st.radio("Selecione a Forma de Pagamento:", [f"Boleto Bancário (Até {max_bol}x)", f"Cartão de Crédito (Até {max_cc}x)"])
-                limite_parcelas = max_bol if "Boleto" in forma_pagamento else max_cc
-                with col_pag2: st.write(f"#### 📊 Simulação para **R$ {total_setup:,.2f}** no {forma_pagamento.split(' ')[0]}")
-                
-                dados_tabela = []
-                for n in range(1, limite_parcelas + 1):
-                    val_parcela = total_setup / n if n <= max_sj else (total_setup * ((1 + taxa_juros) ** n)) / n
-                    total_pago = total_setup if n <= max_sj else (total_setup * ((1 + taxa_juros) ** n))
-                    dados_tabela.append({"Plano": f"{n}x", "Valor Parcela": f"R$ {val_parcela:,.2f}".replace(",", "_").replace(".", ",").replace("_", "."), "Total Final": f"R$ {total_pago:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")})
-                with st.container(height=300): st.dataframe(dados_tabela, use_container_width=True, hide_index=True)
-                
-                st.write("---")
-                st.subheader("📝 Apresentação Final para o Cliente")
-                col_sel1, col_sel2 = st.columns([4, 6])
-                with col_sel1: parcela_escolhida = st.selectbox("Selecione a condição fechada com o cliente:", range(1, limite_parcelas + 1), format_func=lambda x: f"{x}x parcela(s)")
-                txt_parcela, forma_limpa, mrr_formatado = dados_tabela[parcela_escolhida - 1]["Valor Parcela"], forma_pagamento.split(' ')[0], f"R$ {total_mensal:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
-                
-                st.markdown(f"""
-                    <div style="background-color: #f0f7ff; border-left: 5px solid #0066cc; padding: 18px; border-radius: 8px; margin-bottom: 15px;">
-                        <p style="font-size: 1.25rem; font-weight: 600; color: #1e293b; margin-bottom: 10px;">💳 <b>Setup Inicial:</b> <span style="color: #0066cc; font-size: 1.35rem;">{parcela_escolhida}x de {txt_parcela}</span> <span style="font-size: 0.95rem; color: #64748b;">(no {forma_limpa})</span></p>
-                        <p style="font-size: 1.25rem; font-weight: 600; color: #1e293b; margin: 0;">🔄 <b>Total Serviços:</b> <span style="color: #059669; font-size: 1.35rem;">{mrr_formatado} / mês</span> <span style="font-size: 0.95rem; color: #64748b;">(no Boleto)</span></p>
-                    </div>
-                """, unsafe_allow_html=True) 
-                
-                avisos_projeto = validar_inconsistencias_carrinho(st.session_state["carrinho"], df_regras)
-                
-                pode_gravar = True
-                if avisos_projeto:
-                    st.warning("⚠️ **AVISOS DE INCONSISTÊNCIA TÉCNICA NO PROJETO:**")
-                    for a in avisos_projeto: st.write(f"- {a}")
-                    if not st.checkbox("Estou ciente das inconsistências técnicas acima e confirmo o salvamento da proposta assim mesmo.", key="chk_override_regras"): pode_gravar = False
-                
-                if not unidade_selecionada or not nome_proposta.strip():
-                    pode_gravar = False
-                
-                _, col_btn_fechar = st.columns([6, 4])
-                with col_btn_fechar:
-                    if st.button("✅ Fechar Proposta Comercial", type="primary", disabled=not pode_gravar, use_container_width=True, help="Preencha o Nome da Proposta e a Unidade de Mão de Obra para habilitar"):
-                        idx_editando = st.session_state.get("proposta_idx_editando")
-                        if idx_editando: sucesso = atualizar_proposta_modificada(idx_editando, nome_proposta, total_mensal, total_setup, forma_limpa, parcela_escolhida, txt_parcela, st.session_state["carrinho"], st.session_state["desc_prod"], st.session_state["desc_alarme"], st.session_state["desc_imagem"], temperatura_escolhida, status_escolhido)
-                        else: sucesso = salvar_proposta(st.session_state["lead_dados"].get("nome", ""), nome_proposta, st.session_state["nome_usuario"], st.session_state["email_usuario"], total_mensal, total_setup, forma_limpa, parcela_escolhida, txt_parcela, st.session_state["carrinho"], st.session_state["desc_prod"], st.session_state["desc_alarme"], st.session_state["desc_imagem"], temperatura_escolhida, status_escolhido)
-                        if sucesso:
-                            # ENVIO DE E-MAIL SE APROVADA NA TELA DO SIMULADOR
-                            if status_escolhido == "Aprovada":
-                                df_us = carregar_usuarios()
-                                df_us['Email_C'] = df_us['Email'].astype(str).str.strip().str.lower()
-                                emails_destino = obter_emails_gestores(df_us, st.session_state['unidade_usuario'], st.session_state['vertical_usuario'])
-                                if emails_destino:
-                                    eqp_fmt = f"R$ {(bruto_produtos * (1 - (st.session_state['desc_prod']/100))):,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
-                                    mo_fmt = f"R$ {total_mao_obra:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
-                                    enviar_email_aprovacao(st.session_state['nome_usuario'], st.session_state['unidade_usuario'], st.session_state['vertical_usuario'], mrr_formatado, eqp_fmt, mo_fmt, emails_destino)
-                                
-                            st.session_state["msg_sucesso"] = f"🎉 Proposta '{nome_proposta}' {'modificada' if idx_editando else 'registrada'} com sucesso!"
-                            st.session_state["gatilho_limpar_tudo"] = True; st.cache_data.clear(); st.rerun()
-            else: st.info("Adicione itens no carrinho para gerar o parcelamento.")
-
-        except Exception as e: st.error(f"❌ Erro na conexão: {e}")
 
 # ==========================================
 # 6. INICIALIZAÇÃO E FLUXO DE TELAS
