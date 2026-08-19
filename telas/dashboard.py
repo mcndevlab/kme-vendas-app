@@ -411,7 +411,9 @@ def tela_principal():
         with c_modo: modo_prop = st.radio("Modo de Exibição:", ["📱 Cartões (Celular)", "🖥️ Tabela Analítica"], key="modo_visao_propostas", horizontal=True)
 
         if st.session_state.get("renovar_proposta_idx"):
-            idx_planilha, dados_prop = st.session_state["renovar_proposta_idx"], st.session_state["renovar_proposta_dados"]
+            idx_planilha = st.session_state["renovar_proposta_idx"]
+            dados_prop = st.session_state["renovar_proposta_dados"]
+            
             st.info(f"🎯 **Gerenciar Proposta:** {dados_prop.get('Nome_Cliente')} *(Ref: {dados_prop.get('Nome_Proposta', '')})*")
             
             c1, c2 = st.columns(2)
@@ -473,6 +475,12 @@ def tela_principal():
 
         df_prop = df_prop.iloc[::-1] if not df_prop.empty else pd.DataFrame()
         hoje = datetime.datetime.now()
+        cfg = carregar_configuracoes()
+        vertical_user = str(st.session_state.get('vertical_usuario', '')).strip().lower()
+        if "varejo" in vertical_user: limite_vencimento, limite_temp = int(cfg.get("Venc_Proposta_Varejo", 10)), int(cfg.get("Temp_Proposta_Varejo", 5))
+        elif "condominio" in vertical_user: limite_vencimento, limite_temp = int(cfg.get("Venc_Proposta_Cond", 10)), int(cfg.get("Temp_Proposta_Cond", 5))
+        elif "grandes_contas" in vertical_user or "gc" in vertical_user: limite_vencimento, limite_temp = int(cfg.get("Venc_Proposta_GC", 10)), int(cfg.get("Temp_Proposta_GC", 5))
+        else: limite_vencimento, limite_temp = int(cfg.get("Venc_Proposta", 10)), int(cfg.get("Temp_Proposta", 5))
 
         if df_prop.empty: st.info("Nenhuma proposta registrada.")
         else:
@@ -787,7 +795,8 @@ def tela_principal():
                 with aba_servicos:
                     grupos_serv = ["Servico Alarme", "Servico Imagem"]
                     sub_abas_serv = st.tabs(grupos_serv + ["Outros"])
-                    for i, nome in enumerate(grupos_serv): preencher_aba_grupo(df_produtos, nome)
+                    for i, nome in enumerate(grupos_serv):
+                        with sub_abas_serv[i]: preencher_aba_grupo(df_produtos, nome)
                     with sub_abas_serv[-1]:
                         outros_serv = df_produtos[df_produtos['Categoria_Receita'].fillna("").astype(str).str.lower().str.contains("mensal|loca|servi|seguro") & ~df_produtos['Grupo_Itens'].fillna("").astype(str).str.strip().str.lower().isin([g.lower() for g in grupos_serv])]
                         with st.container(height=500):
@@ -797,7 +806,8 @@ def tela_principal():
                 with aba_produtos:
                     grupos_prod = ["Smart Alarme", "JFL 8W", "AXPRO", "Detect IA", "CFTV"]
                     sub_abas_prod = st.tabs(grupos_prod + ["Outros"])
-                    for i, nome in enumerate(grupos_prod): preencher_aba_grupo(df_produtos, nome)
+                    for i, nome in enumerate(grupos_prod):
+                        with sub_abas_prod[i]: preencher_aba_grupo(df_produtos, nome)
                     with sub_abas_prod[-1]:
                         outros_prod = df_produtos[~df_produtos['Categoria_Receita'].fillna("").astype(str).str.lower().str.contains("mensal|loca|servi|seguro|obra|instala") & ~df_produtos['Grupo_Itens'].fillna("").astype(str).str.strip().str.lower().isin([g.lower() for g in grupos_prod])]
                         with st.container(height=500):
