@@ -1,6 +1,6 @@
 import streamlit as st
 import os
-from modulos.db import carregar_usuarios, salvar_nova_senha
+from modulos.db import carregar_usuarios
 from modulos.utils import enviar_email_recuperacao_senha
 
 def tela_login():
@@ -102,9 +102,6 @@ def tela_trocar_senha():
             confirma = st.text_input("Confirme a Nova Senha", type="password")
             if st.form_submit_button("Salvar Nova Senha", type="primary", use_container_width=True):
                 if nova_senha and nova_senha == confirma:
-                    if salvar_nova_senha(st.session_state["email_usuario"], nova_senha):
-                        st.session_state["precisa_trocar_senha"] = False
-                        st.success("✅ Senha alterada com sucesso! Redirecionando...")
-                        st.rerun()
+                    st.warning("⚠️ Função de salvar no banco de dados temporariamente desativada.")
                 else:
                     st.error("⚠️ As senhas não coincidem ou estão vazias.")
