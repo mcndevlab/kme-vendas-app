@@ -792,7 +792,7 @@ def tela_principal():
                         match_mo_card = df_valor_ponto[(df_valor_ponto['Unidade'].astype(str).str.strip() == unidade_selecionada) & (df_valor_ponto['Nome_Item'].astype(str).str.strip() == nome_item_limpo)]
                         if not match_mo_card.empty:
                             pv_card = converter_para_numero(match_mo_card.iloc[0]['Valor_MO'])
-                            if str(match_mo_card.iloc[0].get('Codigo', '')).strip() and str(match_mo.iloc[0].get('Codigo', '')).strip() != 'nan': cod_kme = str(match_mo_card.iloc[0].get('Codigo', '')).strip()
+                            if str(match_mo_card.iloc[0].get('Codigo', '')).strip() and str(match_mo_card.iloc[0].get('Codigo', '')).strip() != 'nan': cod_kme = str(match_mo_card.iloc[0].get('Codigo', '')).strip()
                     
                     if st.button(f"{'🔽' if is_aberto else '▶️'} {nome_item_limpo}{f' (Cód: {cod_kme})' if cod_kme else ''}", key=f"btn_acc_{index}", use_container_width=True): st.session_state["item_aberto"] = None if is_aberto else index; st.rerun()
                     
@@ -932,7 +932,7 @@ def tela_principal():
                 if not unidade_selecionada or not nome_proposta.strip():
                     pode_gravar = False
                 
-                # --- BOTÃO MOVIDO PARA CÁ (SALVAR ORÇAMENTO) ---
+                # --- BOTÃO SALVAR ORÇAMENTO MOVIDO PARA CÁ ---
                 st.write("")
                 if st.button("💾 Salvar Orçamento", type="primary", disabled=not pode_gravar, use_container_width=True, help="Preencha o Nome da Proposta e a Unidade de Mão de Obra para habilitar"):
                     idx_editando = st.session_state.get("proposta_idx_editando")
@@ -992,7 +992,7 @@ def tela_principal():
                 
                 with c_contrato:
                     if st.button("📝 Gerar Contrato", type="primary", use_container_width=True):
-                        st.info("🚀 Módulo de Contratos em desenvolvimento! (Leia as instruções)")
+                        st.info("🚀 Módulo de Contratos em desenvolvimento! (Aguardando o arquivo base)")
 
             else: st.info("Adicione itens no carrinho para gerar o parcelamento.")
         except Exception as e: st.error(f"❌ Erro na conexão: {e}")
