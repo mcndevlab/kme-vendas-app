@@ -2,7 +2,12 @@ import streamlit as st
 from telas.login import tela_login, tela_trocar_senha
 from telas.dashboard import tela_principal
 
-st.set_page_config(page_title="Khronos Sales", page_icon="🛡️", layout="wide")
+st.set_page_config(
+    page_title="Khronos Sales", 
+    page_icon="🛡️", 
+    layout="wide",
+    initial_sidebar_state="expanded"  # <-- Essa é a instrução que força o menu a nascer aberto!
+)
 
 st.markdown("""
     <style>
