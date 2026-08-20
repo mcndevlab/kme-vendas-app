@@ -122,7 +122,8 @@ def salvar_lead(ld, vendedor, email):
     try:
         aba = conectar_banco().worksheet("Cadastro_Clientes")
         agora = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        aba.append_row([agora, ld.get("nome", ""), ld.get("cpf_cnpj", ""),ld.get("Data_Nascimento",""), ld.get("endereco", ""), ld.get("numero", ""), ld.get("cidade", ""), ld.get("estado", ""), ld.get("telefone", ""), ld.get("contato", ""), ld.get("email_cliente", ""), ld.get("gps", ""), vendedor, email, ""])
+        # Atenção: Ajustado para chamar 'data_nascimento' (minúsculo) conforme vem da memória do dashboard
+        aba.append_row([agora, ld.get("nome", ""), ld.get("cpf_cnpj", ""), ld.get("data_nascimento",""), ld.get("endereco", ""), ld.get("numero", ""), ld.get("cidade", ""), ld.get("estado", ""), ld.get("telefone", ""), ld.get("contato", ""), ld.get("email_cliente", ""), ld.get("gps", ""), vendedor, email, ""])
         return len(aba.col_values(1))
     except Exception as err:
         st.error(f"❌ Erro ao registrar Lead: {err}")
@@ -132,9 +133,11 @@ def atualizar_lead(row_index, ld):
     try:
         aba = conectar_banco().worksheet("Cadastro_Clientes")
         agora = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        valores = [[ld.get("nome", ""), ld.get("cpf_cnpj", ""),ld.get("Data_Nascimento",""), ld.get("endereco", ""), ld.get("numero", ""), ld.get("cidade", ""), ld.get("estado", ""), ld.get("telefone", ""), ld.get("contato", ""), ld.get("email_cliente", ""), ld.get("gps", "")]]
-        aba.update(f"B{row_index}:K{row_index}", valores)
-        aba.update_cell(row_index, 14, agora) 
+        # Atenção: Ajustado 'data_nascimento' e o limite do Range aumentou de K para L
+        valores = [[ld.get("nome", ""), ld.get("cpf_cnpj", ""), ld.get("data_nascimento",""), ld.get("endereco", ""), ld.get("numero", ""), ld.get("cidade", ""), ld.get("estado", ""), ld.get("telefone", ""), ld.get("contato", ""), ld.get("email_cliente", ""), ld.get("gps", "")]]
+        aba.update(f"B{row_index}:L{row_index}", valores)
+        # O campo de atualização pulou para a coluna 15 devido à nova coluna
+        aba.update_cell(row_index, 15, agora) 
         return True
     except: return False
 
