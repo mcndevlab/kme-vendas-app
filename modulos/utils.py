@@ -4,6 +4,7 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import streamlit as st
+import datetime
 
 def converter_para_numero(valor):
     if isinstance(valor, (int, float)): return float(valor)
@@ -214,3 +215,93 @@ def enviar_email_aprovacao(nome_consultor, unidade, vertical, valor_mrr, valor_e
     except Exception as e:
         st.error(f"Erro ao disparar email: {e}")
         return False
+
+# --- NOVO: MOTOR DE GERAÇÃO DE PROPOSTA EM HTML ---
+def gerar_html_proposta(cliente, proposta, vendedor, itens_carrinho, mrr, setup, condicao_texto):
+    hoje = datetime.datetime.now().strftime("%d/%m/%Y")
+    
+    linhas_tabela = ""
+    for item in itens_carrinho:
+        qtd = item.get('quantidade', item.get('Qtd', 1))
+        nome = item.get('nome', item.get('Produto / Serviço', ''))
+        linhas_tabela += f"<tr><td style='text-align:center;'>{qtd}</td><td>{nome}</td></tr>"
+
+    html = f"""
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+        <meta charset="UTF-8">
+        <title>Proposta Comercial - {cliente}</title>
+        <style>
+            body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #1e293b; max-width: 800px; margin: 0 auto; padding: 40px; line-height: 1.6; }}
+            .cabecalho {{ border-bottom: 3px solid #e20613; padding-bottom: 20px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: center; }}
+            .logo-text {{ font-size: 28px; font-weight: 900; color: #e20613; margin: 0; }}
+            .info-geral p {{ margin: 5px 0; font-size: 14px; color: #64748b; }}
+            .box-cliente {{ background-color: #f8fafc; border-left: 4px solid #0f172a; padding: 20px; border-radius: 8px; margin-bottom: 30px; }}
+            .box-cliente h2 {{ margin-top: 0; color: #0f172a; font-size: 20px; }}
+            .box-cliente p {{ margin: 5px 0; font-size: 16px; }}
+            table {{ width: 100%; border-collapse: collapse; margin-bottom: 30px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }}
+            th, td {{ padding: 12px 15px; border-bottom: 1px solid #e2e8f0; text-align: left; }}
+            th {{ background-color: #f1f5f9; color: #334155; font-weight: 600; text-transform: uppercase; font-size: 13px; }}
+            .box-financeiro {{ background-color: #f0fdf4; border: 1px solid #bbf7d0; padding: 25px; border-radius: 8px; margin-bottom: 40px; }}
+            .box-financeiro h3 {{ margin-top: 0; color: #166534; font-size: 18px; margin-bottom: 15px; border-bottom: 1px solid #bbf7d0; padding-bottom: 10px; }}
+            .linha-valor {{ display: flex; justify-content: space-between; font-size: 16px; margin-bottom: 10px; }}
+            .linha-destaque {{ display: flex; justify-content: space-between; font-size: 20px; font-weight: bold; color: #166534; margin-top: 15px; padding-top: 15px; border-top: 2px dashed #bbf7d0; }}
+            .rodape {{ text-align: center; font-size: 12px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 20px; }}
+        </style>
+    </head>
+    <body>
+        <div class="cabecalho">
+            <div>
+                <h1 class="logo-text">Khronos</h1>
+                <p style="margin: 0; color: #64748b; font-weight: 600;">Proposta Comercial</p>
+            </div>
+            <div class="info-geral" style="text-align: right;">
+                <p><b>Data:</b> {hoje}</p>
+                <p><b>Consultor:</b> {vendedor}</p>
+            </div>
+        </div>
+        
+        <div class="box-cliente">
+            <h2>Dados do Cliente</h2>
+            <p><b>Nome/Razão Social:</b> {cliente}</p>
+            <p><b>Referência do Projeto:</b> {proposta}</p>
+        </div>
+        
+        <h3 style="color: #334155; margin-bottom: 15px;">Escopo do Projeto</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 10%; text-align: center;">Qtd</th>
+                    <th>Produto / Serviço</th>
+                </tr>
+            </thead>
+            <tbody>
+                {linhas_tabela}
+            </tbody>
+        </table>
+        
+        <div class="box-financeiro">
+            <h3>Resumo de Investimento</h3>
+            <div class="linha-valor">
+                <span>Investimento Inicial (Setup / Equipamentos):</span>
+                <strong>{setup}</strong>
+            </div>
+            <div class="linha-valor" style="font-size: 14px; color: #475569;">
+                <span>Condição de Pagamento:</span>
+                <span>{condicao_texto}</span>
+            </div>
+            <div class="linha-destaque">
+                <span>Total em Serviços (Mensalidade):</span>
+                <span>{mrr} / mês</span>
+            </div>
+        </div>
+        
+        <div class="rodape">
+            <p>Proposta comercial válida por 10 dias a partir da data de emissão.</p>
+            <p><i>* Sujeita à aprovação de crédito e viabilidade técnica no local.</i></p>
+        </div>
+    </body>
+    </html>
+    """
+    return html
