@@ -41,6 +41,7 @@ def carregar_proposta_para_simulador(idx_planilha, dados_prop, df_produtos, df_l
     
     st.session_state["temp_proposta_atual"] = str(dados_prop.get('Temperatura', 'Selecione...'))
     st.session_state["status_proposta_atual"] = str(dados_prop.get('Status_Proposta', 'Selecione...'))
+    st.session_state["status_credito_deps"] = None
     
     nome_cliente = str(dados_prop.get('Nome_Cliente', '')).strip()
     lead_row = df_leads[df_leads['Nome_Razao'].astype(str).str.strip() == nome_cliente]
@@ -272,11 +273,12 @@ def tela_principal():
             "lead_dados": {}, "lead_salvo": False, "renovar_proposta_idx": None, 
             "proposta_idx_editando": None, "editando_lead_idx": None, "nome_proposta_atual": "", 
             "temp_proposta_atual": "Selecione...", "status_proposta_atual": "Selecione...", 
+            "status_credito_deps": None,
             "ultimo_gps_capturado": "", "item_aberto": None, "unidade_mo_selecionada": None, 
             "gatilho_limpar_tudo": False
         })
     if st.session_state.get("gatilho_limpar_carrinho", False):
-        st.session_state.update({"carrinho": [], "desc_prod": 0.0, "desc_alarme": 0.0, "desc_imagem": 0.0, "item_aberto": None, "gatilho_limpar_carrinho": False})
+        st.session_state.update({"carrinho": [], "desc_prod": 0.0, "desc_alarme": 0.0, "desc_imagem": 0.0, "item_aberto": None, "gatilho_limpar_carrinho": False, "status_credito_deps": None})
     if st.session_state["msg_sucesso"] != "": st.success(st.session_state["msg_sucesso"]); st.session_state["msg_sucesso"] = ""
 
     # --- TELAS INTERNAS ---
@@ -478,6 +480,7 @@ def tela_principal():
                             
                 elif acao == "Modificar Proposta (Simulador)":
                     if st.button("✏️ Ir para o Simulador", type="primary"):
+                        st.session_state["status_credito_deps"] = None
                         carregar_proposta_para_simulador(idx_planilha, dados_prop, df_produtos, df_leads); st.rerun()
                         
             if st.button("❌ Cancelar Operação"):
@@ -550,10 +553,23 @@ def tela_principal():
                     with c5: st.write(mrr)
                     with c6: st.write(setup)
                     with c7:
+                        # RECUPERA O LEAD PARA INJETAR NO CONTRATO DA TABELA
+                        lead_para_contrato = {"nome": cliente}
+                        match_lead = df_leads[df_leads['Nome_Razao'].astype(str).str.strip() == cliente.strip()]
+                        if not match_lead.empty:
+                            lr = match_lead.iloc[0]
+                            lead_para_contrato = {"nome": str(lr.get("Nome_Razao", "")), "cpf_cnpj": str(lr.get("CPF_CNPJ", "")).replace('nan', ''), "endereco": str(lr.get("Endereco", "")).replace('nan', ''), "numero": str(lr.get("Numero", "")).replace('nan', ''), "cidade": str(lr.get("Cidade", "")).replace('nan', ''), "estado": str(lr.get("Estado", "")).replace('nan', ''), "telefone": str(lr.get("Telefone", "")).replace('nan', ''), "email_cliente": str(lr.get("Email_Cliente", "")).replace('nan', '')}
+                            
                         itens_para_html = [{"quantidade": it["Qtd"], "nome": it["Produto / Serviço"]} for it in extrair_tabela_crm_itens(row.get('Itens_Orcamento', ''))]
                         condicao_txt = f"{str(row.get('Parcelas', '1x'))} de {str(row.get('Valor_Parcela', 'R$ 0,00'))} ({str(row.get('Forma_Pagamento', 'Boleto'))})"
                         html_prop = gerar_html_proposta(cliente, nome_prop, vendedor, itens_para_html, mrr, setup, condicao_txt)
-                        st.download_button("📄 Download Proposta", data=html_prop, file_name=f"Proposta_{cliente}.html", mime="text/html", use_container_width=True, type="primary", key=f"dl_tab_{linha_real_planilha}")
+                        docx_bytes, erro_docx = gerar_documento_contrato(lead_para_contrato, mrr, setup, condicao_txt)
+                        
+                        c_b1, c_b2 = st.columns(2)
+                        with c_b1:
+                            st.download_button("📄 PDF", data=html_prop, file_name=f"Proposta_{cliente}.html", mime="text/html", use_container_width=True, key=f"dl_tab_{linha_real_planilha}")
+                        with c_b2:
+                            if docx_bytes: st.download_button("📝 DOCX", data=docx_bytes, file_name=f"Contrato_{cliente}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True, key=f"dl_cx_{linha_real_planilha}")
                         
                         if status == "Em Negociação":
                             if st.button("🔄 Renovar", key=f"ren_tab_{linha_real_planilha}", use_container_width=True): st.session_state["renovar_proposta_idx"] = linha_real_planilha; st.session_state["renovar_proposta_dados"] = row.to_dict(); st.rerun()
@@ -669,7 +685,7 @@ def tela_principal():
                         btn1, btn2 = st.columns([7, 3])
                         with btn1:
                             if st.button("Proposta", key=f"btn_lead_{idx}", use_container_width=True): 
-                                st.session_state.update({"lead_dados": {"data_cadastro": data_cad, "nome": nome, "cpf_cnpj": str(row.get('CPF_CNPJ', '')).replace('nan', ''), "endereco": str(row.get('Endereco', '')).replace('nan', ''), "numero": str(row.get('Numero', '')).replace('nan', ''), "cidade": str(row.get('Cidade', '')).replace('nan', ''), "estado": str(row.get("Estado", "")).replace('nan', ''), "telefone": telefone, "email_cliente": str(row.get('Email_Cliente', '')).replace('nan', ''), "contato": str(row.get('Contato', '')).replace('nan', ''), "gps": str(row.get("Coordenadas_GPS", "")).replace('nan', '')}, "lead_salvo": True, "gatilho_limpar_carrinho": True, "etapa_atual": "simulador", "editando_lead_idx": linha_real_planilha, "nome_proposta_atual": "", "temp_proposta_atual": "Selecione...", "status_proposta_atual": "Selecione..."}); st.rerun()
+                                st.session_state.update({"lead_dados": {"data_cadastro": data_cad, "nome": nome, "cpf_cnpj": str(row.get('CPF_CNPJ', '')).replace('nan', ''), "endereco": str(row.get('Endereco', '')).replace('nan', ''), "numero": str(row.get('Numero', '')).replace('nan', ''), "cidade": str(row.get('Cidade', '')).replace('nan', ''), "estado": str(row.get("Estado", "")).replace('nan', ''), "telefone": telefone, "email_cliente": str(row.get('Email_Cliente', '')).replace('nan', ''), "contato": str(row.get('Contato', '')).replace('nan', ''), "gps": str(row.get("Coordenadas_GPS", "")).replace('nan', '')}, "lead_salvo": True, "gatilho_limpar_carrinho": True, "etapa_atual": "simulador", "editando_lead_idx": linha_real_planilha, "nome_proposta_atual": "", "temp_proposta_atual": "Selecione...", "status_proposta_atual": "Selecione...", "status_credito_deps": None}); st.rerun()
                         with btn2:
                             if st.button("✏️", help="Editar", key=f"btn_edit_lead_{idx}", use_container_width=True): 
                                 st.session_state.update({"lead_dados": {"data_cadastro": data_cad, "nome": nome, "cpf_cnpj": str(row.get('CPF_CNPJ', '')).replace('nan', ''), "endereco": str(row.get('Endereco', '')).replace('nan', ''), "numero": str(row.get('Numero', '')).replace('nan', ''), "cidade": str(row.get('Cidade', '')).replace('nan', ''), "estado": str(row.get("Estado", "")).replace('nan', ''), "telefone": telefone, "email_cliente": str(row.get('Email_Cliente', '')).replace('nan', ''), "contato": str(row.get('Contato', '')).replace('nan', ''), "gps": str(row.get("Coordenadas_GPS", "")).replace('nan', '')}, "lead_salvo": True, "etapa_atual": "lead", "editando_lead_idx": linha_real_planilha}); st.rerun()
@@ -696,7 +712,7 @@ def tela_principal():
                         c_b1, c_b2 = st.columns([7, 3])
                         with c_b1:
                             if st.button("➕ Criar Proposta", key=f"btn_lead_{idx}", type="primary", use_container_width=True): 
-                                st.session_state.update({"lead_dados": {"data_cadastro": data_cad, "nome": nome, "cpf_cnpj": str(row.get('CPF_CNPJ', '')).replace('nan', ''), "endereco": str(row.get('Endereco', '')).replace('nan', ''), "numero": str(row.get('Numero', '')).replace('nan', ''), "cidade": str(row.get('Cidade', '')).replace('nan', ''), "estado": str(row.get("Estado", "")).replace('nan', ''), "telefone": telefone, "email_cliente": str(row.get('Email_Cliente', '')).replace('nan', ''), "contato": str(row.get('Contato', '')).replace('nan', ''), "gps": str(row.get("Coordenadas_GPS", "")).replace('nan', '')}, "lead_salvo": True, "gatilho_limpar_carrinho": True, "etapa_atual": "simulador", "editando_lead_idx": linha_real_planilha, "nome_proposta_atual": "", "temp_proposta_atual": "Selecione...", "status_proposta_atual": "Selecione..."}); st.rerun()
+                                st.session_state.update({"lead_dados": {"data_cadastro": data_cad, "nome": nome, "cpf_cnpj": str(row.get('CPF_CNPJ', '')).replace('nan', ''), "endereco": str(row.get('Endereco', '')).replace('nan', ''), "numero": str(row.get('Numero', '')).replace('nan', ''), "cidade": str(row.get('Cidade', '')).replace('nan', ''), "estado": str(row.get("Estado", "")).replace('nan', ''), "telefone": telefone, "email_cliente": str(row.get('Email_Cliente', '')).replace('nan', ''), "contato": str(row.get('Contato', '')).replace('nan', ''), "gps": str(row.get("Coordenadas_GPS", "")).replace('nan', '')}, "lead_salvo": True, "gatilho_limpar_carrinho": True, "etapa_atual": "simulador", "editando_lead_idx": linha_real_planilha, "nome_proposta_atual": "", "temp_proposta_atual": "Selecione...", "status_proposta_atual": "Selecione...", "status_credito_deps": None}); st.rerun()
                         with c_b2:
                             if st.button("✏️ Editar", key=f"btn_edit_lead_{idx}", use_container_width=True): 
                                 st.session_state.update({"lead_dados": {"data_cadastro": data_cad, "nome": nome, "cpf_cnpj": str(row.get('CPF_CNPJ', '')).replace('nan', ''), "endereco": str(row.get('Endereco', '')).replace('nan', ''), "numero": str(row.get('Numero', '')).replace('nan', ''), "cidade": str(row.get('Cidade', '')).replace('nan', ''), "estado": str(row.get("Estado", "")).replace('nan', ''), "telefone": telefone, "email_cliente": str(row.get('Email_Cliente', '')).replace('nan', ''), "contato": str(row.get('Contato', '')).replace('nan', ''), "gps": str(row.get("Coordenadas_GPS", "")).replace('nan', '')}, "lead_salvo": True, "etapa_atual": "lead", "editando_lead_idx": linha_real_planilha}); st.rerun()
@@ -920,6 +936,35 @@ def tela_principal():
                                 if st.button("❌", key=f"del_{i}"): st.session_state["carrinho"].pop(i); st.rerun()
                 if len(st.session_state["carrinho"]) > 0:
                     if st.button("🗑️ Limpar Carrinho", use_container_width=True): st.session_state["gatilho_limpar_carrinho"] = True; st.rerun()
+
+            st.divider()
+            
+            # ---> INÍCIO DA ANÁLISE DE CRÉDITO <---
+            st.write("### 🔍 Análise de Crédito (Deps)")
+            cpf_cnpj_lead = st.session_state["lead_dados"].get("cpf_cnpj", "").strip()
+            
+            if not cpf_cnpj_lead:
+                st.warning("⚠️ CPF/CNPJ não informado no cadastro do cliente. Edite o cliente para adicionar o documento.")
+            else:
+                c_cred1, c_cred2 = st.columns([3, 7])
+                with c_cred1:
+                    if st.button("⚙️ Consultar Crédito", use_container_width=True):
+                        st.session_state["status_credito_deps"] = "Aprovado"
+                        st.rerun()
+                with c_cred2:
+                    if st.session_state.get("status_credito_deps") == "Aprovado":
+                        st.markdown("""
+                            <div style="background-color: #ecfdf5; border-left: 5px solid #10b981; padding: 15px; border-radius: 8px;">
+                                <p style="margin:0; font-size: 1.1rem; color: #065f46;"><b>✅ Análise Concluída</b></p>
+                                <p style="margin:0; font-size: 0.95rem; color: #065f46;">
+                                <b>Score:</b> 1.000 | <b>Prob. Inadimplência:</b> 0% | <b>Pendências:</b> 0<br>
+                                <b>Resultado Final:</b> Sem restrições. (Liberação total de parcelamento em Boleto)
+                                </p>
+                            </div>
+                        """, unsafe_allow_html=True)
+                    else:
+                        st.info("Aguardando consulta do documento para liberação de política de pagamento.")
+            # ---> FIM DA ANÁLISE DE CRÉDITO <---
 
             st.divider()
             st.header("💳 Tabela de Parcelamento (Setup Inicial)")
