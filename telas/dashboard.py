@@ -969,7 +969,22 @@ def tela_principal():
                 if not unidade_selecionada or not nome_proposta.strip() or temperatura_escolhida == "Selecione..." or status_escolhido == "Selecione...":
                     pode_gravar = False
                 
-                st.write("")
+                # --- MÁGICA CSS PARA DEIXAR APENAS O BOTÃO DE SALVAR VERDE ---
+                st.markdown('<p id="btn-salvar-orcamento"></p>', unsafe_allow_html=True)
+                st.markdown('''
+                    <style>
+                    div:has(> p#btn-salvar-orcamento) + div button:not(:disabled) {
+                        background-color: #10b981 !important; /* Cor Verde */
+                        color: white !important;
+                        border-color: #10b981 !important;
+                    }
+                    div:has(> p#btn-salvar-orcamento) + div button:not(:disabled):hover {
+                        background-color: #059669 !important; /* Verde mais escuro ao passar o mouse */
+                        border-color: #059669 !important;
+                    }
+                    </style>
+                ''', unsafe_allow_html=True)
+                
                 if st.button("💾 Salvar Orçamento", type="primary", disabled=not pode_gravar, use_container_width=True, help="Preencha o Nome da Proposta, Temperatura, Status e Unidade de Mão de Obra para habilitar"):
                     idx_editando = st.session_state.get("proposta_idx_editando")
                     if idx_editando: sucesso = atualizar_proposta_modificada(idx_editando, nome_proposta, total_mensal, total_setup, forma_limpa, parcela_escolhida, txt_parcela, st.session_state["carrinho"], st.session_state["desc_prod"], st.session_state["desc_alarme"], st.session_state["desc_imagem"], temperatura_escolhida, status_escolhido)
@@ -1007,28 +1022,29 @@ def tela_principal():
                 
                 with c_gerar:
                     st.download_button(
-                        label="📄 Gerar Proposta",
+                        label="📄 Download Proposta",
                         data=html_prop,
                         file_name=f"Proposta_{st.session_state['lead_dados'].get('nome', '')}.html",
                         mime="text/html",
-                        use_container_width=True
+                        use_container_width=True,
+                        type="primary"
                     )
                 
                 with c_email:
-                    if st.button("✉️ Enviar p/ E-mail", disabled=not tem_email, help="Falta E-mail no cadastro do cliente." if not tem_email else f"Enviar para {email_cliente}", use_container_width=True):
+                    if st.button("✉️ Enviar p/ E-mail", disabled=not tem_email, help="Falta E-mail no cadastro do cliente." if not tem_email else f"Enviar para {email_cliente}", use_container_width=True, type="primary"):
                         if enviar_email_proposta_cliente(st.session_state["lead_dados"].get("nome", ""), email_cliente, html_prop):
                             st.toast(f"E-mail enviado com sucesso para {email_cliente}! ✉️")
                             
                 with c_wa:
                     if tem_telefone:
-                        st.link_button("💬 Enviar p/ WhatsApp", wa_url, use_container_width=True)
+                        st.link_button("💬 Enviar p/ WhatsApp", wa_url, use_container_width=True, type="primary")
                     else:
-                        st.button("💬 Enviar p/ WhatsApp", disabled=True, help="Falta Telefone no cadastro do cliente.", use_container_width=True)
+                        st.button("💬 Enviar p/ WhatsApp", disabled=True, help="Falta Telefone no cadastro do cliente.", use_container_width=True, type="primary")
                 
                 with c_contrato:
                     docx_bytes, erro_docx = gerar_documento_contrato(st.session_state["lead_dados"], mrr_formatado, setup_txt, condicao_txt)
                     if docx_bytes:
-                        st.download_button("📝 Baixar Contrato", data=docx_bytes, file_name=f"Contrato_{st.session_state['lead_dados'].get('nome', '')}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True, type="primary")
+                        st.download_button("📝 Download Contrato", data=docx_bytes, file_name=f"Contrato_{st.session_state['lead_dados'].get('nome', '')}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True, type="primary")
                     else:
                         st.button("📝 Erro no Contrato", disabled=True, help=str(erro_docx), use_container_width=True, type="primary")
 
