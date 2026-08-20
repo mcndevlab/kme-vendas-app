@@ -16,7 +16,8 @@ from modulos.db import (carregar_produtos, carregar_valores_sensores, carregar_v
 
 from modulos.utils import (padronizar_nome, padronizar_telefone, extrair_tabela_crm_itens,
                            validar_inconsistencias_carrinho, calcular_novos_valores_proposta,
-                           obter_detalhes_split, obter_emails_gestores, enviar_email_aprovacao, converter_para_numero)
+                           obter_detalhes_split, obter_emails_gestores, enviar_email_aprovacao, 
+                           converter_para_numero, gerar_html_proposta)
 
 def carregar_proposta_para_simulador(idx_planilha, dados_prop, df_produtos, df_leads):
     novo_carrinho = []
@@ -507,6 +508,7 @@ def tela_principal():
                     temperatura = str(row.get('Temperatura', 'Morno 🌤️')).split(" ")[0]
                     data_ref_prop_str = str(row.get('Data_Proposta_Renovada', '')).strip() or str(row.get('Data_Proposta', '')).strip()
                     data_ref_temp_str = str(row.get('Data_Temperatura_Renovada', '')).strip() or str(row.get('Data_Proposta', '')).strip()
+                    vendedor = str(row.get('Nome_Usuario', ''))
                     
                     tempo_faltante = "-"
                     if status == "Em Negociação":
@@ -538,6 +540,13 @@ def tela_principal():
                     with c5: st.write(mrr)
                     with c6: st.write(setup)
                     with c7:
+                        # Geração do HTML para Download na Tabela
+                        itens_para_html = [{"quantidade": it["Qtd"], "nome": it["Produto / Serviço"]} for it in extrair_tabela_crm_itens(row.get('Itens_Orcamento', ''))]
+                        condicao_txt = f"{str(row.get('Parcelas', '1x'))} de {str(row.get('Valor_Parcela', 'R$ 0,00'))} ({str(row.get('Forma_Pagamento', 'Boleto'))})"
+                        html_prop = gerar_html_proposta(cliente, nome_prop, vendedor, itens_para_html, mrr, setup, condicao_txt)
+                        
+                        st.download_button("📄 Gerar", data=html_prop, file_name=f"Proposta_{cliente}.html", mime="text/html", use_container_width=True, key=f"dl_tab_{linha_real_planilha}")
+                        
                         if status == "Em Negociação":
                             if st.button("🔄 Renovar", key=f"ren_tab_{linha_real_planilha}", use_container_width=True): st.session_state["renovar_proposta_idx"] = linha_real_planilha; st.session_state["renovar_proposta_dados"] = row.to_dict(); st.rerun()
             else:
@@ -548,6 +557,7 @@ def tela_principal():
                     temperatura = str(row.get('Temperatura', 'Morno 🌤️')).split(" ")[0]
                     data_ref_prop_str = str(row.get('Data_Proposta_Renovada', '')).strip() or str(row.get('Data_Proposta', '')).strip()
                     data_ref_temp_str = str(row.get('Data_Temperatura_Renovada', '')).strip() or str(row.get('Data_Proposta', '')).strip()
+                    vendedor = str(row.get('Nome_Usuario', ''))
                     
                     tempo_faltante = "-"
                     if status == "Em Negociação":
@@ -570,8 +580,18 @@ def tela_principal():
                         itens_crm = extrair_tabela_crm_itens(row.get('Itens_Orcamento', ''))
                         if itens_crm: st.write("---"); st.markdown("📋 **Itens do Projeto para CRM:**"); st.dataframe(itens_crm, use_container_width=True, hide_index=True)
                         st.write("")
-                        if status == "Em Negociação":
-                            if st.button("🔄 Renovar / Editar Proposta", key=f"ren_tab_{linha_real_planilha}", type="primary", use_container_width=True): st.session_state["renovar_proposta_idx"] = linha_real_planilha; st.session_state["renovar_proposta_dados"] = row.to_dict(); st.rerun()
+                        
+                        # Geração do HTML para Download no Card
+                        itens_para_html = [{"quantidade": it["Qtd"], "nome": it["Produto / Serviço"]} for it in extrair_tabela_crm_itens(row.get('Itens_Orcamento', ''))]
+                        condicao_txt = f"{str(row.get('Parcelas', '1x'))} de {str(row.get('Valor_Parcela', 'R$ 0,00'))} ({str(row.get('Forma_Pagamento', 'Boleto'))})"
+                        html_prop = gerar_html_proposta(cliente, nome_prop, vendedor, itens_para_html, mrr, setup, condicao_txt)
+                        
+                        c_b1, c_b2 = st.columns(2)
+                        with c_b1:
+                            st.download_button("📄 Gerar PDF/HTML", data=html_prop, file_name=f"Proposta_{cliente}.html", mime="text/html", use_container_width=True, key=f"dl_card_{linha_real_planilha}")
+                        with c_b2:
+                            if status == "Em Negociação":
+                                if st.button("🔄 Renovar / Editar", key=f"ren_tab_{linha_real_planilha}", type="primary", use_container_width=True): st.session_state["renovar_proposta_idx"] = linha_real_planilha; st.session_state["renovar_proposta_dados"] = row.to_dict(); st.rerun()
 
     elif st.session_state["etapa_atual"] == "meus_leads":
         st.header("📋 Meus Clientes")
@@ -914,9 +934,23 @@ def tela_principal():
                 if not unidade_selecionada or not nome_proposta.strip():
                     pode_gravar = False
                 
-                _, col_btn_fechar = st.columns([6, 4])
+                _, col_btn_gerar, col_btn_fechar = st.columns([2, 4, 4])
+                
+                with col_btn_gerar:
+                    condicao_txt = f"{parcela_escolhida}x de {txt_parcela} (no {forma_limpa})"
+                    setup_txt = f"R$ {total_setup:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+                    html_prop = gerar_html_proposta(st.session_state["lead_dados"].get("nome", ""), nome_proposta, st.session_state["nome_usuario"], st.session_state["carrinho"], mrr_formatado, setup_txt, condicao_txt)
+                    
+                    st.download_button(
+                        label="📄 Gerar Proposta Comercial",
+                        data=html_prop,
+                        file_name=f"Proposta_{st.session_state['lead_dados'].get('nome', '')}.html",
+                        mime="text/html",
+                        use_container_width=True
+                    )
+                
                 with col_btn_fechar:
-                    if st.button("✅ Fechar Proposta Comercial", type="primary", disabled=not pode_gravar, use_container_width=True, help="Preencha o Nome da Proposta e a Unidade de Mão de Obra para habilitar"):
+                    if st.button("💾 Salvar Proposta Comercial", type="primary", disabled=not pode_gravar, use_container_width=True, help="Preencha o Nome da Proposta e a Unidade de Mão de Obra para habilitar"):
                         idx_editando = st.session_state.get("proposta_idx_editando")
                         if idx_editando: sucesso = atualizar_proposta_modificada(idx_editando, nome_proposta, total_mensal, total_setup, forma_limpa, parcela_escolhida, txt_parcela, st.session_state["carrinho"], st.session_state["desc_prod"], st.session_state["desc_alarme"], st.session_state["desc_imagem"], temperatura_escolhida, status_escolhido)
                         else: sucesso = salvar_proposta(st.session_state["lead_dados"].get("nome", ""), nome_proposta, st.session_state["nome_usuario"], st.session_state["email_usuario"], total_mensal, total_setup, forma_limpa, parcela_escolhida, txt_parcela, st.session_state["carrinho"], st.session_state["desc_prod"], st.session_state["desc_alarme"], st.session_state["desc_imagem"], temperatura_escolhida, status_escolhido)
