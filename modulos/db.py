@@ -72,7 +72,7 @@ def carregar_usuarios():
 @st.cache_data(ttl=300)
 def carregar_todos_leads():
     try:
-        df = pd.DataFrame(conectar_banco().worksheet("Funil_Vendas").get_all_records())
+        df = pd.DataFrame(conectar_banco().worksheet("Cadastro_Clientes").get_all_records())
         if not df.empty:
             df.columns = df.columns.astype(str).str.strip()
             if 'Email_Vendedor' in df.columns: df['Email_Vendedor'] = df['Email_Vendedor'].astype(str).str.strip().str.lower()
@@ -120,7 +120,7 @@ def atualizar_senha_banco(email_usuario, nova_senha):
 
 def salvar_lead(ld, vendedor, email):
     try:
-        aba = conectar_banco().worksheet("Funil_Vendas")
+        aba = conectar_banco().worksheet("Cadastro_Clientes")
         agora = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         aba.append_row([agora, ld.get("nome", ""), ld.get("cpf_cnpj", ""), ld.get("endereco", ""), ld.get("numero", ""), ld.get("cidade", ""), ld.get("estado", ""), ld.get("telefone", ""), ld.get("contato", ""), ld.get("email_cliente", ""), ld.get("gps", ""), vendedor, email, ""])
         return len(aba.col_values(1))
@@ -130,7 +130,7 @@ def salvar_lead(ld, vendedor, email):
 
 def atualizar_lead(row_index, ld):
     try:
-        aba = conectar_banco().worksheet("Funil_Vendas")
+        aba = conectar_banco().worksheet("Cadastro_Clientes")
         agora = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         valores = [[ld.get("nome", ""), ld.get("cpf_cnpj", ""), ld.get("endereco", ""), ld.get("numero", ""), ld.get("cidade", ""), ld.get("estado", ""), ld.get("telefone", ""), ld.get("contato", ""), ld.get("email_cliente", ""), ld.get("gps", "")]]
         aba.update(f"B{row_index}:K{row_index}", valores)
