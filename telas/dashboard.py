@@ -792,7 +792,7 @@ def tela_principal():
                         match_mo_card = df_valor_ponto[(df_valor_ponto['Unidade'].astype(str).str.strip() == unidade_selecionada) & (df_valor_ponto['Nome_Item'].astype(str).str.strip() == nome_item_limpo)]
                         if not match_mo_card.empty:
                             pv_card = converter_para_numero(match_mo_card.iloc[0]['Valor_MO'])
-                            if str(match_mo_card.iloc[0].get('Codigo', '')).strip() and str(match_mo_card.iloc[0].get('Codigo', '')).strip() != 'nan': cod_kme = str(match_mo_card.iloc[0].get('Codigo', '')).strip()
+                            if str(match_mo_card.iloc[0].get('Codigo', '')).strip() and str(match_mo.iloc[0].get('Codigo', '')).strip() != 'nan': cod_kme = str(match_mo_card.iloc[0].get('Codigo', '')).strip()
                     
                     if st.button(f"{'🔽' if is_aberto else '▶️'} {nome_item_limpo}{f' (Cód: {cod_kme})' if cod_kme else ''}", key=f"btn_acc_{index}", use_container_width=True): st.session_state["item_aberto"] = None if is_aberto else index; st.rerun()
                     
@@ -932,7 +932,26 @@ def tela_principal():
                 if not unidade_selecionada or not nome_proposta.strip():
                     pode_gravar = False
                 
-                # --- NOVO: BLOCO DE AÇÕES DIRETAS (HTML, E-MAIL E WHATSAPP) ---
+                # --- BOTÃO MOVIDO PARA CÁ (SALVAR ORÇAMENTO) ---
+                st.write("")
+                if st.button("💾 Salvar Orçamento", type="primary", disabled=not pode_gravar, use_container_width=True, help="Preencha o Nome da Proposta e a Unidade de Mão de Obra para habilitar"):
+                    idx_editando = st.session_state.get("proposta_idx_editando")
+                    if idx_editando: sucesso = atualizar_proposta_modificada(idx_editando, nome_proposta, total_mensal, total_setup, forma_limpa, parcela_escolhida, txt_parcela, st.session_state["carrinho"], st.session_state["desc_prod"], st.session_state["desc_alarme"], st.session_state["desc_imagem"], temperatura_escolhida, status_escolhido)
+                    else: sucesso = salvar_proposta(st.session_state["lead_dados"].get("nome", ""), nome_proposta, st.session_state["nome_usuario"], st.session_state["email_usuario"], total_mensal, total_setup, forma_limpa, parcela_escolhida, txt_parcela, st.session_state["carrinho"], st.session_state["desc_prod"], st.session_state["desc_alarme"], st.session_state["desc_imagem"], temperatura_escolhida, status_escolhido)
+                    if sucesso:
+                        if status_escolhido == "Aprovada":
+                            df_us = carregar_usuarios()
+                            df_us['Email_C'] = df_us['Email'].astype(str).str.strip().str.lower()
+                            emails_destino = obter_emails_gestores(df_us, st.session_state['unidade_usuario'], st.session_state['vertical_usuario'])
+                            if emails_destino:
+                                eqp_fmt = f"R$ {(bruto_produtos * (1 - (st.session_state['desc_prod']/100))):,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+                                mo_fmt = f"R$ {total_mao_obra:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+                                enviar_email_aprovacao(st.session_state['nome_usuario'], st.session_state['unidade_usuario'], st.session_state['vertical_usuario'], mrr_formatado, eqp_fmt, mo_fmt, emails_destino)
+                            
+                        st.session_state["msg_sucesso"] = f"🎉 Orçamento '{nome_proposta}' salvo com sucesso!"
+                        st.session_state["gatilho_limpar_tudo"] = True; st.cache_data.clear(); st.rerun()
+
+                # --- BLOCO DE AÇÕES DIRETAS (HTML, E-MAIL, WHATSAPP E CONTRATO) ---
                 condicao_txt = f"{parcela_escolhida}x de {txt_parcela} (no {forma_limpa})"
                 setup_txt = f"R$ {total_setup:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
                 html_prop = gerar_html_proposta(st.session_state["lead_dados"].get("nome", ""), nome_proposta, st.session_state["nome_usuario"], st.session_state["carrinho"], mrr_formatado, setup_txt, condicao_txt)
@@ -949,7 +968,7 @@ def tela_principal():
                 
                 st.write("---")
                 st.markdown("#### 📤 Ações da Proposta")
-                c_gerar, c_email, c_wa, c_salvar = st.columns([2.5, 2.5, 2.5, 3.5])
+                c_gerar, c_email, c_wa, c_contrato = st.columns([2.5, 2.5, 2.5, 3.5])
                 
                 with c_gerar:
                     st.download_button(
@@ -969,25 +988,11 @@ def tela_principal():
                     if tem_telefone:
                         st.link_button("💬 Enviar p/ WhatsApp", wa_url, use_container_width=True)
                     else:
-                        # Botão inativo caso não tenha telefone
                         st.button("💬 Enviar p/ WhatsApp", disabled=True, help="Falta Telefone no cadastro do cliente.", use_container_width=True)
                 
-                with c_salvar:
-                    if st.button("💾 Salvar Proposta Comercial", type="primary", disabled=not pode_gravar, use_container_width=True, help="Preencha o Nome da Proposta e a Unidade de Mão de Obra para habilitar"):
-                        idx_editando = st.session_state.get("proposta_idx_editando")
-                        if idx_editando: sucesso = atualizar_proposta_modificada(idx_editando, nome_proposta, total_mensal, total_setup, forma_limpa, parcela_escolhida, txt_parcela, st.session_state["carrinho"], st.session_state["desc_prod"], st.session_state["desc_alarme"], st.session_state["desc_imagem"], temperatura_escolhida, status_escolhido)
-                        else: sucesso = salvar_proposta(st.session_state["lead_dados"].get("nome", ""), nome_proposta, st.session_state["nome_usuario"], st.session_state["email_usuario"], total_mensal, total_setup, forma_limpa, parcela_escolhida, txt_parcela, st.session_state["carrinho"], st.session_state["desc_prod"], st.session_state["desc_alarme"], st.session_state["desc_imagem"], temperatura_escolhida, status_escolhido)
-                        if sucesso:
-                            if status_escolhido == "Aprovada":
-                                df_us = carregar_usuarios()
-                                df_us['Email_C'] = df_us['Email'].astype(str).str.strip().str.lower()
-                                emails_destino = obter_emails_gestores(df_us, st.session_state['unidade_usuario'], st.session_state['vertical_usuario'])
-                                if emails_destino:
-                                    eqp_fmt = f"R$ {(bruto_produtos * (1 - (st.session_state['desc_prod']/100))):,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
-                                    mo_fmt = f"R$ {total_mao_obra:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
-                                    enviar_email_aprovacao(st.session_state['nome_usuario'], st.session_state['unidade_usuario'], st.session_state['vertical_usuario'], mrr_formatado, eqp_fmt, mo_fmt, emails_destino)
-                                
-                            st.session_state["msg_sucesso"] = f"🎉 Proposta '{nome_proposta}' {'modificada' if idx_editando else 'registrada'} com sucesso!"
-                            st.session_state["gatilho_limpar_tudo"] = True; st.cache_data.clear(); st.rerun()
+                with c_contrato:
+                    if st.button("📝 Gerar Contrato", type="primary", use_container_width=True):
+                        st.info("🚀 Módulo de Contratos em desenvolvimento! (Leia as instruções)")
+
             else: st.info("Adicione itens no carrinho para gerar o parcelamento.")
         except Exception as e: st.error(f"❌ Erro na conexão: {e}")
