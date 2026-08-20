@@ -216,10 +216,37 @@ def enviar_email_aprovacao(nome_consultor, unidade, vertical, valor_mrr, valor_e
         st.error(f"Erro ao disparar email: {e}")
         return False
 
-# --- NOVO: MOTOR DE GERAÇÃO DE PROPOSTA EM HTML ---
+# Envia a proposta comercial diretamente para o e-mail do cliente
+def enviar_email_proposta_cliente(nome_cliente, email_destino, html_conteudo):
+    try:
+        if "smtp" not in st.secrets:
+            st.info("💡 E-mail para o cliente gerado com sucesso! (Configure SMTP no Cloud para envio real).")
+            return True
+            
+        remetente = st.secrets["smtp"]["email"]
+        senha = st.secrets["smtp"]["password"]
+        servidor = st.secrets["smtp"]["server"]
+        porta = st.secrets["smtp"]["port"]
+
+        msg = MIMEMultipart()
+        msg['From'] = remetente
+        msg['To'] = email_destino
+        msg['Subject'] = f"Khronos - Sua Proposta Comercial"
+
+        msg.attach(MIMEText(html_conteudo, 'html'))
+
+        server = smtplib.SMTP(servidor, porta)
+        server.starttls()
+        server.login(remetente, senha)
+        server.sendmail(remetente, [email_destino], msg.as_string())
+        server.quit()
+        return True
+    except Exception as e:
+        st.error(f"Erro ao disparar email para o cliente: {e}")
+        return False
+
 def gerar_html_proposta(cliente, proposta, vendedor, itens_carrinho, mrr, setup, condicao_texto):
     hoje = datetime.datetime.now().strftime("%d/%m/%Y")
-    
     linhas_tabela = ""
     for item in itens_carrinho:
         qtd = item.get('quantidade', item.get('Qtd', 1))
