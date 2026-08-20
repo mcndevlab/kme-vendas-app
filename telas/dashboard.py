@@ -265,7 +265,13 @@ def tela_principal():
         if st.button("🚪 Sair", use_container_width=True): st.session_state.clear(); st.rerun()
 
     if st.session_state.get("gatilho_limpar_tudo", False):
-        st.session_state.update({"carrinho": [], "desc_prod": 0.0, "desc_alarme": 0.0, "desc_imagem": 0.0, "lead_dados": {}, "lead_salvo": False, "renovar_proposta_idx": None, "proposta_idx_editando": None, "editando_lead_idx": None, "nome_proposta_atual": "", "ultimo_gps_capturado": "", "item_aberto": None, "unidade_mo_selecionada": None, "gatilho_limpar_tudo": False})
+        st.session_state.update({
+            "carrinho": [], "desc_prod": 0.0, "desc_alarme": 0.0, "desc_imagem": 0.0, 
+            "lead_dados": {}, "lead_salvo": False, "renovar_proposta_idx": None, 
+            "proposta_idx_editando": None, "editando_lead_idx": None, "nome_proposta_atual": "", 
+            "temp_proposta_atual": "", "status_proposta_atual": "", "ultimo_gps_capturado": "", 
+            "item_aberto": None, "unidade_mo_selecionada": None, "gatilho_limpar_tudo": False
+        })
     if st.session_state.get("gatilho_limpar_carrinho", False):
         st.session_state.update({"carrinho": [], "desc_prod": 0.0, "desc_alarme": 0.0, "desc_imagem": 0.0, "item_aberto": None, "gatilho_limpar_carrinho": False})
     if st.session_state["msg_sucesso"] != "": st.success(st.session_state["msg_sucesso"]); st.session_state["msg_sucesso"] = ""
@@ -743,12 +749,18 @@ def tela_principal():
                 st.markdown('<p style="color:#d90429; font-size:0.85rem; margin-top:-10px; font-weight:600;">⚠️ Preenchimento obrigatório</p>', unsafe_allow_html=True)
         with c_temp:
             temp_opcoes = ["Quente 🔥", "Morno 🌤️", "Frio ❄️"]
-            temp_salva = st.session_state.get("temp_proposta_atual", "Quente 🔥")
-            temperatura_escolhida = st.selectbox("🌡️ Temperatura Atual:", temp_opcoes, index=temp_opcoes.index(temp_salva) if temp_salva in temp_opcoes else 0)
+            temp_salva = st.session_state.get("temp_proposta_atual", "")
+            idx_temp = temp_opcoes.index(temp_salva) if temp_salva in temp_opcoes else None
+            temperatura_escolhida = st.selectbox("🌡️ Temperatura Atual:", temp_opcoes, index=idx_temp, placeholder="Selecione...")
+            if not temperatura_escolhida:
+                st.markdown('<p style="color:#d90429; font-size:0.85rem; margin-top:-10px; font-weight:600;">⚠️ Preenchimento obrigatório</p>', unsafe_allow_html=True)
         with c_status:
             status_opcoes = ["Em Negociação", "Aprovada"]
-            status_salvo = st.session_state.get("status_proposta_atual", "Em Negociação")
-            status_escolhido = st.selectbox("📊 Status da Proposta:", status_opcoes, index=status_opcoes.index(status_salvo) if status_salvo in status_opcoes else 0)
+            status_salvo = st.session_state.get("status_proposta_atual", "")
+            idx_status = status_opcoes.index(status_salvo) if status_salvo in status_opcoes else None
+            status_escolhido = st.selectbox("📊 Status da Proposta:", status_opcoes, index=idx_status, placeholder="Selecione...")
+            if not status_escolhido:
+                st.markdown('<p style="color:#d90429; font-size:0.85rem; margin-top:-10px; font-weight:600;">⚠️ Preenchimento obrigatório</p>', unsafe_allow_html=True)
         
         st.divider()
 
@@ -929,11 +941,11 @@ def tela_principal():
                     for a in avisos_projeto: st.write(f"- {a}")
                     if not st.checkbox("Estou ciente das inconsistências técnicas acima e confirmo o salvamento da proposta assim mesmo.", key="chk_override_regras"): pode_gravar = False
                 
-                if not unidade_selecionada or not nome_proposta.strip():
+                if not unidade_selecionada or not nome_proposta.strip() or not temperatura_escolhida or not status_escolhido:
                     pode_gravar = False
                 
                 st.write("")
-                if st.button("💾 Salvar Orçamento", type="primary", disabled=not pode_gravar, use_container_width=True, help="Preencha o Nome da Proposta e a Unidade de Mão de Obra para habilitar"):
+                if st.button("💾 Salvar Orçamento", type="primary", disabled=not pode_gravar, use_container_width=True, help="Preencha o Nome da Proposta, Unidade de Mão de Obra, Temperatura e Status para habilitar"):
                     idx_editando = st.session_state.get("proposta_idx_editando")
                     if idx_editando: sucesso = atualizar_proposta_modificada(idx_editando, nome_proposta, total_mensal, total_setup, forma_limpa, parcela_escolhida, txt_parcela, st.session_state["carrinho"], st.session_state["desc_prod"], st.session_state["desc_alarme"], st.session_state["desc_imagem"], temperatura_escolhida, status_escolhido)
                     else: sucesso = salvar_proposta(st.session_state["lead_dados"].get("nome", ""), nome_proposta, st.session_state["nome_usuario"], st.session_state["email_usuario"], total_mensal, total_setup, forma_limpa, parcela_escolhida, txt_parcela, st.session_state["carrinho"], st.session_state["desc_prod"], st.session_state["desc_alarme"], st.session_state["desc_imagem"], temperatura_escolhida, status_escolhido)
