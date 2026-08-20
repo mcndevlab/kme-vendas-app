@@ -248,11 +248,11 @@ def enviar_email_proposta_cliente(nome_cliente, email_destino, html_conteudo):
         st.error(f"Erro ao disparar email para o cliente: {e}")
         return False
 
-# --- NOVA FUNÇÃO DE EMAIL DE RECUPERAÇÃO DE SENHA ---
 def enviar_email_recuperacao_senha(email_destino, senha_atual):
     try:
         if "smtp" not in st.secrets:
-            st.info(f"💡 Simulação de Recuperação! Senha enviada seria: {senha_atual}")
+            # Removida a exibição da senha na tela por motivos de segurança!
+            st.info("💡 E-mail de recuperação gerado com sucesso! (Configure SMTP no Cloud para envio real).")
             return True
             
         remetente = st.secrets["smtp"]["email"]
