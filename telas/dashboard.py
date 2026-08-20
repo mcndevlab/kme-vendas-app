@@ -19,7 +19,7 @@ from modulos.utils import (padronizar_nome, padronizar_telefone, extrair_tabela_
                            validar_inconsistencias_carrinho, calcular_novos_valores_proposta,
                            obter_detalhes_split, obter_emails_gestores, enviar_email_aprovacao, 
                            converter_para_numero, gerar_html_proposta, enviar_email_proposta_cliente,
-                           gerar_documento_contrato)
+                           gerar_documento_contrato, enviar_para_zapsign)
 
 def carregar_proposta_para_simulador(idx_planilha, dados_prop, df_produtos, df_leads):
     novo_carrinho = []
@@ -550,26 +550,13 @@ def tela_principal():
                     with c5: st.write(mrr)
                     with c6: st.write(setup)
                     with c7:
-                        # RECUPERA O LEAD PARA INJETAR NO CONTRATO DA TABELA
-                        lead_para_contrato = {"nome": cliente}
-                        match_lead = df_leads[df_leads['Nome_Razao'].astype(str).str.strip() == cliente.strip()]
-                        if not match_lead.empty:
-                            lr = match_lead.iloc[0]
-                            lead_para_contrato = {"nome": str(lr.get("Nome_Razao", "")), "cpf_cnpj": str(lr.get("CPF_CNPJ", "")).replace('nan', ''), "endereco": str(lr.get("Endereco", "")).replace('nan', ''), "numero": str(lr.get("Numero", "")).replace('nan', ''), "cidade": str(lr.get("Cidade", "")).replace('nan', ''), "estado": str(lr.get("Estado", "")).replace('nan', ''), "telefone": str(lr.get("Telefone", "")).replace('nan', ''), "email_cliente": str(lr.get("Email_Cliente", "")).replace('nan', '')}
-                            
                         itens_para_html = [{"quantidade": it["Qtd"], "nome": it["Produto / Serviço"]} for it in extrair_tabela_crm_itens(row.get('Itens_Orcamento', ''))]
                         condicao_txt = f"{str(row.get('Parcelas', '1x'))} de {str(row.get('Valor_Parcela', 'R$ 0,00'))} ({str(row.get('Forma_Pagamento', 'Boleto'))})"
                         html_prop = gerar_html_proposta(cliente, nome_prop, vendedor, itens_para_html, mrr, setup, condicao_txt)
-                        docx_bytes, erro_docx = gerar_documento_contrato(lead_para_contrato, mrr, setup, condicao_txt)
+                        st.download_button("📄 Download Proposta", data=html_prop, file_name=f"Proposta_{cliente}.html", mime="text/html", use_container_width=True, type="primary", key=f"dl_tab_{linha_real_planilha}")
                         
-                        c_b1, c_b2, c_b3 = st.columns(3)
-                        with c_b1:
-                            st.download_button("📄 Download Proposta", data=html_prop, file_name=f"Proposta_{cliente}.html", mime="text/html", use_container_width=True, type="primary", key=f"dl_tab_{linha_real_planilha}")
-                        with c_b2:
-                            if docx_bytes: st.download_button("📝 Download Contrato", data=docx_bytes, file_name=f"Contrato_{cliente}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True, type="primary", key=f"dl_cx_{linha_real_planilha}")
-                        with c_b3:
-                            if status == "Em Negociação":
-                                if st.button("🔄 Editar", key=f"ren_tab_{linha_real_planilha}", type="primary", use_container_width=True): st.session_state["renovar_proposta_idx"] = linha_real_planilha; st.session_state["renovar_proposta_dados"] = row.to_dict(); st.rerun()
+                        if status == "Em Negociação":
+                            if st.button("🔄 Renovar", key=f"ren_tab_{linha_real_planilha}", use_container_width=True): st.session_state["renovar_proposta_idx"] = linha_real_planilha; st.session_state["renovar_proposta_dados"] = row.to_dict(); st.rerun()
             else:
                 for idx, row in df_prop.iterrows():
                     linha_real_planilha = row.name + 2 
@@ -614,12 +601,18 @@ def tela_principal():
                         html_prop = gerar_html_proposta(cliente, nome_prop, vendedor, itens_para_html, mrr, setup, condicao_txt)
                         docx_bytes, erro_docx = gerar_documento_contrato(lead_para_contrato, mrr, setup, condicao_txt)
                         
-                        c_b1, c_b2, c_b3 = st.columns(3)
+                        c_b1, c_b2, c_b3, c_b4 = st.columns(4)
                         with c_b1:
                             st.download_button("📄 Download Proposta", data=html_prop, file_name=f"Proposta_{cliente}.html", mime="text/html", use_container_width=True, type="primary", key=f"dl_card_{linha_real_planilha}")
                         with c_b2:
                             if docx_bytes: st.download_button("📝 Download Contrato", data=docx_bytes, file_name=f"Contrato_{cliente}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True, type="primary", key=f"dl_cx_card_{linha_real_planilha}")
                         with c_b3:
+                            if docx_bytes:
+                                if st.button("✍️ Assinar Contrato", type="primary", use_container_width=True, key=f"zap_card_{linha_real_planilha}"):
+                                    sucesso, retorno = enviar_para_zapsign(docx_bytes, cliente, lead_para_contrato.get('email_cliente', ''), lead_para_contrato.get('telefone', ''))
+                                    if sucesso: st.success(retorno)
+                                    else: st.error(retorno)
+                        with c_b4:
                             if status == "Em Negociação":
                                 if st.button("🔄 Editar", key=f"ren_tab_{linha_real_planilha}", type="primary", use_container_width=True): st.session_state["renovar_proposta_idx"] = linha_real_planilha; st.session_state["renovar_proposta_dados"] = row.to_dict(); st.rerun()
 
@@ -969,22 +962,23 @@ def tela_principal():
                 if not unidade_selecionada or not nome_proposta.strip() or temperatura_escolhida == "Selecione..." or status_escolhido == "Selecione...":
                     pode_gravar = False
                 
-                # --- MÁGICA CSS PARA DEIXAR APENAS O BOTÃO DE SALVAR VERDE ---
+                # --- MÁGICA CSS PARA DEIXAR O BOTÃO DE SALVAR VERDE ---
                 st.markdown('<p id="btn-salvar-orcamento"></p>', unsafe_allow_html=True)
                 st.markdown('''
                     <style>
                     div:has(> p#btn-salvar-orcamento) + div button:not(:disabled) {
-                        background-color: #10b981 !important; /* Cor Verde */
+                        background-color: #10b981 !important; /* Verde Esmeralda */
                         color: white !important;
                         border-color: #10b981 !important;
                     }
                     div:has(> p#btn-salvar-orcamento) + div button:not(:disabled):hover {
-                        background-color: #059669 !important; /* Verde mais escuro ao passar o mouse */
+                        background-color: #059669 !important; /* Verde mais escuro no hover */
                         border-color: #059669 !important;
                     }
                     </style>
                 ''', unsafe_allow_html=True)
                 
+                st.write("")
                 if st.button("💾 Salvar Orçamento", type="primary", disabled=not pode_gravar, use_container_width=True, help="Preencha o Nome da Proposta, Temperatura, Status e Unidade de Mão de Obra para habilitar"):
                     idx_editando = st.session_state.get("proposta_idx_editando")
                     if idx_editando: sucesso = atualizar_proposta_modificada(idx_editando, nome_proposta, total_mensal, total_setup, forma_limpa, parcela_escolhida, txt_parcela, st.session_state["carrinho"], st.session_state["desc_prod"], st.session_state["desc_alarme"], st.session_state["desc_imagem"], temperatura_escolhida, status_escolhido)
@@ -1018,7 +1012,9 @@ def tela_principal():
                 
                 st.write("---")
                 st.markdown("#### 📤 Ações da Proposta")
-                c_gerar, c_email, c_wa, c_contrato = st.columns([2.5, 2.5, 2.5, 3.5])
+                
+                # NOVO LAYOUT: 5 COLUNAS
+                c_gerar, c_email, c_wa, c_contrato, c_zapsign = st.columns(5)
                 
                 with c_gerar:
                     st.download_button(
@@ -1047,6 +1043,17 @@ def tela_principal():
                         st.download_button("📝 Download Contrato", data=docx_bytes, file_name=f"Contrato_{st.session_state['lead_dados'].get('nome', '')}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True, type="primary")
                     else:
                         st.button("📝 Erro no Contrato", disabled=True, help=str(erro_docx), use_container_width=True, type="primary")
+
+                with c_zapsign:
+                    if docx_bytes:
+                        if st.button("✍️ Assinar Contrato", type="primary", use_container_width=True, help="Disparar via ZapSign"):
+                            sucesso, retorno = enviar_para_zapsign(docx_bytes, st.session_state["lead_dados"].get("nome", ""), email_cliente, telefone_cliente)
+                            if sucesso:
+                                st.success("Enviado para ZapSign!")
+                            else:
+                                st.error(retorno)
+                    else:
+                        st.button("✍️ Assinar Contrato", type="primary", disabled=True, use_container_width=True)
 
             else: st.info("Adicione itens no carrinho para gerar o parcelamento.")
         except Exception as e: st.error(f"❌ Erro na conexão: {e}")
