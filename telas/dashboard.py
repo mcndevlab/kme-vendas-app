@@ -18,7 +18,8 @@ from modulos.db import (carregar_produtos, carregar_valores_sensores, carregar_v
 from modulos.utils import (padronizar_nome, padronizar_telefone, extrair_tabela_crm_itens,
                            validar_inconsistencias_carrinho, calcular_novos_valores_proposta,
                            obter_detalhes_split, obter_emails_gestores, enviar_email_aprovacao, 
-                           converter_para_numero, gerar_html_proposta, enviar_email_proposta_cliente)
+                           converter_para_numero, gerar_html_proposta, enviar_email_proposta_cliente,
+                           gerar_documento_contrato)
 
 def carregar_proposta_para_simulador(idx_planilha, dados_prop, df_produtos, df_leads):
     novo_carrinho = []
@@ -38,7 +39,6 @@ def carregar_proposta_para_simulador(idx_planilha, dados_prop, df_produtos, df_l
     st.session_state["desc_imagem"] = converter_para_numero(dados_prop.get('Desc_Imagem', '0'))
     st.session_state["nome_proposta_atual"] = str(dados_prop.get('Nome_Proposta', ''))
     
-    # Ao editar, recupera o status original
     st.session_state["temp_proposta_atual"] = str(dados_prop.get('Temperatura', 'Selecione...'))
     st.session_state["status_proposta_atual"] = str(dados_prop.get('Status_Proposta', 'Selecione...'))
     
@@ -553,7 +553,21 @@ def tela_principal():
                         itens_para_html = [{"quantidade": it["Qtd"], "nome": it["Produto / Serviço"]} for it in extrair_tabela_crm_itens(row.get('Itens_Orcamento', ''))]
                         condicao_txt = f"{str(row.get('Parcelas', '1x'))} de {str(row.get('Valor_Parcela', 'R$ 0,00'))} ({str(row.get('Forma_Pagamento', 'Boleto'))})"
                         html_prop = gerar_html_proposta(cliente, nome_prop, vendedor, itens_para_html, mrr, setup, condicao_txt)
-                        st.download_button("📄 Gerar", data=html_prop, file_name=f"Proposta_{cliente}.html", mime="text/html", use_container_width=True, key=f"dl_tab_{linha_real_planilha}")
+                        
+                        # Recuperar o Lead real para injetar no contrato
+                        lead_para_contrato = {"nome": cliente}
+                        match_lead = df_leads[df_leads['Nome_Razao'].astype(str).str.strip() == cliente.strip()]
+                        if not match_lead.empty:
+                            lr = match_lead.iloc[0]
+                            lead_para_contrato = {"nome": str(lr.get("Nome_Razao", "")), "cpf_cnpj": str(lr.get("CPF_CNPJ", "")).replace('nan', ''), "endereco": str(lr.get("Endereco", "")).replace('nan', ''), "numero": str(lr.get("Numero", "")).replace('nan', ''), "cidade": str(lr.get("Cidade", "")).replace('nan', ''), "estado": str(lr.get("Estado", "")).replace('nan', ''), "telefone": str(lr.get("Telefone", "")).replace('nan', ''), "email_cliente": str(lr.get("Email_Cliente", "")).replace('nan', '')}
+                            
+                        docx_bytes, erro_docx = gerar_documento_contrato(lead_para_contrato, mrr, setup, condicao_txt)
+                        
+                        c_b1, c_b2 = st.columns(2)
+                        with c_b1:
+                            st.download_button("📄 PDF", data=html_prop, file_name=f"Proposta_{cliente}.html", mime="text/html", use_container_width=True, key=f"dl_tab_{linha_real_planilha}")
+                        with c_b2:
+                            if docx_bytes: st.download_button("📝 DOCX", data=docx_bytes, file_name=f"Contrato_{cliente}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True, key=f"dl_cx_{linha_real_planilha}")
                         
                         if status == "Em Negociação":
                             if st.button("🔄 Renovar", key=f"ren_tab_{linha_real_planilha}", use_container_width=True): st.session_state["renovar_proposta_idx"] = linha_real_planilha; st.session_state["renovar_proposta_dados"] = row.to_dict(); st.rerun()
@@ -593,12 +607,22 @@ def tela_principal():
                         condicao_txt = f"{str(row.get('Parcelas', '1x'))} de {str(row.get('Valor_Parcela', 'R$ 0,00'))} ({str(row.get('Forma_Pagamento', 'Boleto'))})"
                         html_prop = gerar_html_proposta(cliente, nome_prop, vendedor, itens_para_html, mrr, setup, condicao_txt)
                         
-                        c_b1, c_b2 = st.columns(2)
+                        lead_para_contrato = {"nome": cliente}
+                        match_lead = df_leads[df_leads['Nome_Razao'].astype(str).str.strip() == cliente.strip()]
+                        if not match_lead.empty:
+                            lr = match_lead.iloc[0]
+                            lead_para_contrato = {"nome": str(lr.get("Nome_Razao", "")), "cpf_cnpj": str(lr.get("CPF_CNPJ", "")).replace('nan', ''), "endereco": str(lr.get("Endereco", "")).replace('nan', ''), "numero": str(lr.get("Numero", "")).replace('nan', ''), "cidade": str(lr.get("Cidade", "")).replace('nan', ''), "estado": str(lr.get("Estado", "")).replace('nan', ''), "telefone": str(lr.get("Telefone", "")).replace('nan', ''), "email_cliente": str(lr.get("Email_Cliente", "")).replace('nan', '')}
+                            
+                        docx_bytes, erro_docx = gerar_documento_contrato(lead_para_contrato, mrr, setup, condicao_txt)
+                        
+                        c_b1, c_b2, c_b3 = st.columns(3)
                         with c_b1:
-                            st.download_button("📄 Gerar PDF/HTML", data=html_prop, file_name=f"Proposta_{cliente}.html", mime="text/html", use_container_width=True, key=f"dl_card_{linha_real_planilha}")
+                            st.download_button("📄 Proposta", data=html_prop, file_name=f"Proposta_{cliente}.html", mime="text/html", use_container_width=True, key=f"dl_card_{linha_real_planilha}")
                         with c_b2:
+                            if docx_bytes: st.download_button("📝 Contrato", data=docx_bytes, file_name=f"Contrato_{cliente}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True, key=f"dl_cx_card_{linha_real_planilha}")
+                        with c_b3:
                             if status == "Em Negociação":
-                                if st.button("🔄 Renovar / Editar", key=f"ren_tab_{linha_real_planilha}", type="primary", use_container_width=True): st.session_state["renovar_proposta_idx"] = linha_real_planilha; st.session_state["renovar_proposta_dados"] = row.to_dict(); st.rerun()
+                                if st.button("🔄 Editar", key=f"ren_tab_{linha_real_planilha}", type="primary", use_container_width=True): st.session_state["renovar_proposta_idx"] = linha_real_planilha; st.session_state["renovar_proposta_dados"] = row.to_dict(); st.rerun()
 
     elif st.session_state["etapa_atual"] == "meus_leads":
         st.header("📋 Meus Clientes")
@@ -867,10 +891,10 @@ def tela_principal():
                     v_u = item['preco_venda'] if item['preco_venda'] > 0 else item['preco_mrr']
                     
                     if unidade_selecionada and ("obra" in cat_limpa or "instala" in cat_limpa) and not df_valor_ponto.empty:
-                        match_mo = df_valor_ponto[(df_valor_ponto['Unidade'].astype(str).str.strip() == unidade_selecionada) & (df_valor_ponto['Nome_Item'].astype(str).str.strip() == nome_item_limpo)]
-                        if not match_mo.empty:
-                            v_u = converter_para_numero(match_mo.iloc[0]['Valor_MO'])
-                            if str(match_mo.iloc[0].get('Codigo', '')).strip() and str(match_mo.iloc[0].get('Codigo', '')).strip() != 'nan': item['codigo'] = str(match_mo.iloc[0].get('Codigo', '')).strip()
+                        match_mo_card = df_valor_ponto[(df_valor_ponto['Unidade'].astype(str).str.strip() == unidade_selecionada) & (df_valor_ponto['Nome_Item'].astype(str).str.strip() == nome_item_limpo)]
+                        if not match_mo_card.empty:
+                            v_u = converter_para_numero(match_mo_card.iloc[0]['Valor_MO'])
+                            if str(match_mo_card.iloc[0].get('Codigo', '')).strip() and str(match_mo_card.iloc[0].get('Codigo', '')).strip() != 'nan': item['codigo'] = str(match_mo_card.iloc[0].get('Codigo', '')).strip()
                             
                     if cod_item in ['254000000042', '254000000377', '25400000042', '25400000377'] and not df_valor_sensor.empty:
                         match = df_valor_sensor[(df_valor_sensor['Codigo_Servico'].astype(str).str.strip().str.lstrip('0') == cod_item) & (pd.to_numeric(df_valor_sensor['Sensor_Abertura'], errors='coerce') == qtd_abertura) & (pd.to_numeric(df_valor_sensor['Sensor_IVP'], errors='coerce') == qtd_ivp)]
@@ -1003,8 +1027,11 @@ def tela_principal():
                         st.button("💬 Enviar p/ WhatsApp", disabled=True, help="Falta Telefone no cadastro do cliente.", use_container_width=True)
                 
                 with c_contrato:
-                    if st.button("📝 Gerar Contrato", type="primary", use_container_width=True):
-                        st.info("🚀 Módulo de Contratos em desenvolvimento! (Aguardando o arquivo base)")
+                    docx_bytes, erro_docx = gerar_documento_contrato(st.session_state["lead_dados"], mrr_formatado, setup_txt, condicao_txt)
+                    if docx_bytes:
+                        st.download_button("📝 Baixar Contrato", data=docx_bytes, file_name=f"Contrato_{st.session_state['lead_dados'].get('nome', '')}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True, type="primary")
+                    else:
+                        st.button("📝 Erro no Contrato", disabled=True, help=erro_docx, use_container_width=True, type="primary")
 
             else: st.info("Adicione itens no carrinho para gerar o parcelamento.")
         except Exception as e: st.error(f"❌ Erro na conexão: {e}")
