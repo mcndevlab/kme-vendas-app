@@ -3,6 +3,7 @@ import pandas as pd
 import datetime
 import re
 import os
+import urllib.parse
 import pydeck as pdk
 from streamlit_geolocation import streamlit_geolocation
 from geopy.geocoders import Nominatim
@@ -17,7 +18,7 @@ from modulos.db import (carregar_produtos, carregar_valores_sensores, carregar_v
 from modulos.utils import (padronizar_nome, padronizar_telefone, extrair_tabela_crm_itens,
                            validar_inconsistencias_carrinho, calcular_novos_valores_proposta,
                            obter_detalhes_split, obter_emails_gestores, enviar_email_aprovacao, 
-                           converter_para_numero, gerar_html_proposta)
+                           converter_para_numero, gerar_html_proposta, enviar_email_proposta_cliente)
 
 def carregar_proposta_para_simulador(idx_planilha, dados_prop, df_produtos, df_leads):
     novo_carrinho = []
@@ -540,11 +541,9 @@ def tela_principal():
                     with c5: st.write(mrr)
                     with c6: st.write(setup)
                     with c7:
-                        # Geração do HTML para Download na Tabela
                         itens_para_html = [{"quantidade": it["Qtd"], "nome": it["Produto / Serviço"]} for it in extrair_tabela_crm_itens(row.get('Itens_Orcamento', ''))]
                         condicao_txt = f"{str(row.get('Parcelas', '1x'))} de {str(row.get('Valor_Parcela', 'R$ 0,00'))} ({str(row.get('Forma_Pagamento', 'Boleto'))})"
                         html_prop = gerar_html_proposta(cliente, nome_prop, vendedor, itens_para_html, mrr, setup, condicao_txt)
-                        
                         st.download_button("📄 Gerar", data=html_prop, file_name=f"Proposta_{cliente}.html", mime="text/html", use_container_width=True, key=f"dl_tab_{linha_real_planilha}")
                         
                         if status == "Em Negociação":
@@ -581,7 +580,6 @@ def tela_principal():
                         if itens_crm: st.write("---"); st.markdown("📋 **Itens do Projeto para CRM:**"); st.dataframe(itens_crm, use_container_width=True, hide_index=True)
                         st.write("")
                         
-                        # Geração do HTML para Download no Card
                         itens_para_html = [{"quantidade": it["Qtd"], "nome": it["Produto / Serviço"]} for it in extrair_tabela_crm_itens(row.get('Itens_Orcamento', ''))]
                         condicao_txt = f"{str(row.get('Parcelas', '1x'))} de {str(row.get('Valor_Parcela', 'R$ 0,00'))} ({str(row.get('Forma_Pagamento', 'Boleto'))})"
                         html_prop = gerar_html_proposta(cliente, nome_prop, vendedor, itens_para_html, mrr, setup, condicao_txt)
@@ -934,22 +932,47 @@ def tela_principal():
                 if not unidade_selecionada or not nome_proposta.strip():
                     pode_gravar = False
                 
-                _, col_btn_gerar, col_btn_fechar = st.columns([2, 4, 4])
+                # --- NOVO: BLOCO DE AÇÕES DIRETAS (HTML, E-MAIL E WHATSAPP) ---
+                condicao_txt = f"{parcela_escolhida}x de {txt_parcela} (no {forma_limpa})"
+                setup_txt = f"R$ {total_setup:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+                html_prop = gerar_html_proposta(st.session_state["lead_dados"].get("nome", ""), nome_proposta, st.session_state["nome_usuario"], st.session_state["carrinho"], mrr_formatado, setup_txt, condicao_txt)
                 
-                with col_btn_gerar:
-                    condicao_txt = f"{parcela_escolhida}x de {txt_parcela} (no {forma_limpa})"
-                    setup_txt = f"R$ {total_setup:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
-                    html_prop = gerar_html_proposta(st.session_state["lead_dados"].get("nome", ""), nome_proposta, st.session_state["nome_usuario"], st.session_state["carrinho"], mrr_formatado, setup_txt, condicao_txt)
-                    
+                email_cliente = st.session_state["lead_dados"].get("email_cliente", "").strip()
+                telefone_cliente = st.session_state["lead_dados"].get("telefone", "").strip()
+                tel_numeros = re.sub(r'\D', '', telefone_cliente)
+                
+                tem_email = bool(re.match(r'^[\w\.-]+@[\w\.-]+\.\w+$', email_cliente)) if email_cliente else False
+                tem_telefone = len(tel_numeros) >= 10
+                
+                msg_wa = f"Olá {st.session_state['lead_dados'].get('nome', '')}, tudo bem?\nSegue o resumo da nossa proposta pela Khronos:\n\n*Setup Inicial:* {condicao_txt}\n*Total Serviços:* {mrr_formatado} / mês\n\nQualquer dúvida, estou à disposição!"
+                wa_url = f"https://api.whatsapp.com/send?phone=55{tel_numeros}&text={urllib.parse.quote(msg_wa)}"
+                
+                st.write("---")
+                st.markdown("#### 📤 Ações da Proposta")
+                c_gerar, c_email, c_wa, c_salvar = st.columns([2.5, 2.5, 2.5, 3.5])
+                
+                with c_gerar:
                     st.download_button(
-                        label="📄 Gerar Proposta Comercial",
+                        label="📄 Gerar Proposta",
                         data=html_prop,
                         file_name=f"Proposta_{st.session_state['lead_dados'].get('nome', '')}.html",
                         mime="text/html",
                         use_container_width=True
                     )
                 
-                with col_btn_fechar:
+                with c_email:
+                    if st.button("✉️ Enviar p/ E-mail", disabled=not tem_email, help="Falta E-mail no cadastro do cliente." if not tem_email else f"Enviar para {email_cliente}", use_container_width=True):
+                        if enviar_email_proposta_cliente(st.session_state["lead_dados"].get("nome", ""), email_cliente, html_prop):
+                            st.toast(f"E-mail enviado com sucesso para {email_cliente}! ✉️")
+                            
+                with c_wa:
+                    if tem_telefone:
+                        st.link_button("💬 Enviar p/ WhatsApp", wa_url, use_container_width=True)
+                    else:
+                        # Botão inativo caso não tenha telefone
+                        st.button("💬 Enviar p/ WhatsApp", disabled=True, help="Falta Telefone no cadastro do cliente.", use_container_width=True)
+                
+                with c_salvar:
                     if st.button("💾 Salvar Proposta Comercial", type="primary", disabled=not pode_gravar, use_container_width=True, help="Preencha o Nome da Proposta e a Unidade de Mão de Obra para habilitar"):
                         idx_editando = st.session_state.get("proposta_idx_editando")
                         if idx_editando: sucesso = atualizar_proposta_modificada(idx_editando, nome_proposta, total_mensal, total_setup, forma_limpa, parcela_escolhida, txt_parcela, st.session_state["carrinho"], st.session_state["desc_prod"], st.session_state["desc_alarme"], st.session_state["desc_imagem"], temperatura_escolhida, status_escolhido)
