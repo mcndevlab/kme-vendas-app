@@ -2,8 +2,15 @@ import streamlit as st
 from telas.login import tela_login, tela_trocar_senha
 from telas.dashboard import tela_principal
 
-st.set_page_config(page_title="Khronos Sales", page_icon="🛡️", layout="wide")
+# 1. Configuração da página (Menu nascendo aberto)
+st.set_page_config(
+    page_title="Khronos Sales", 
+    page_icon="🛡️", 
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
+# 2. Estilização CSS Padrão
 st.markdown("""
     <style>
     div[data-testid="stVerticalBlock"] { gap: 0.3rem !important; }
@@ -16,9 +23,39 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# 3. Criação da Memória Inicial
 if "autenticado" not in st.session_state:
-    st.session_state.update({"autenticado": False, "nome_usuario": "", "email_usuario": "", "perfil_usuario": "Consultor", "unidade_usuario": "", "vertical_usuario": "", "carrinho": [], "desc_prod": 0.0, "desc_alarme": 0.0, "desc_imagem": 0.0, "etapa_atual": "lead", "lead_dados": {}, "lead_salvo": False, "msg_sucesso": "", "renovar_proposta_idx": None, "renovar_proposta_dados": {}, "proposta_idx_editando": None, "editando_lead_idx": None, "nome_proposta_atual": "", "ultimo_gps_capturado": "", "item_aberto": None, "unidade_mo_selecionada": None, "modo_visao_leads": "📱 Cartões (Celular)", "modo_visao_propostas": "📱 Cartões (Celular)", "precisa_trocar_senha": False})
+    st.session_state.update({
+        "autenticado": False, 
+        "nome_usuario": "", 
+        "email_usuario": "", 
+        "perfil_usuario": "Consultor", 
+        "unidade_usuario": "", 
+        "vertical_usuario": "", 
+        "carrinho": [], 
+        "desc_prod": 0.0, 
+        "desc_alarme": 0.0, 
+        "desc_imagem": 0.0, 
+        "etapa_atual": "lead", 
+        "lead_dados": {}, 
+        "lead_salvo": False, 
+        "msg_sucesso": "", 
+        "renovar_proposta_idx": None, 
+        "renovar_proposta_dados": {}, 
+        "proposta_idx_editando": None, 
+        "editando_lead_idx": None, 
+        "nome_proposta_atual": "", 
+        "temp_proposta_atual": "Selecione...", 
+        "status_proposta_atual": "Selecione...", 
+        "ultimo_gps_capturado": "", 
+        "item_aberto": None, 
+        "unidade_mo_selecionada": None, 
+        "modo_visao_leads": "📱 Cartões (Celular)", 
+        "modo_visao_propostas": "📱 Cartões (Celular)", 
+        "precisa_trocar_senha": False
+    })
 
+# 4. Roteamento de Telas
 if not st.session_state.get("autenticado", False): 
     tela_login()
 elif st.session_state.get("precisa_trocar_senha", False):
