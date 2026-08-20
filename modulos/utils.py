@@ -2,6 +2,8 @@ import pandas as pd
 import re
 import smtplib
 import io
+import base64
+import requests
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import streamlit as st
@@ -156,7 +158,7 @@ def calcular_novos_valores_proposta(row_data, df_produtos, df_valor_sensor):
         elif "produto" in cat or "equipamento" in cat: bruto_prod += (v_u * qtd)
         else:
             if "imagem" in grupo: bruto_imagem += (v_u * qtd)
-            else: bruto_alarme += (v_u * item['quantidade'])
+            else: bruto_alarme += (v_u * qtd)
             
     novo_total_mrr, novo_total_setup = (bruto_alarme * (1 - desc_a)) + (bruto_imagem * (1 - desc_i)), (bruto_prod * (1 - desc_p)) + mao_obra
     return f"R$ {novo_total_mrr:,.2f}".replace(",", "_").replace(".", ",").replace("_", "."), f"R$ {novo_total_setup:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
@@ -333,17 +335,15 @@ def gerar_html_proposta(cliente, proposta, vendedor, itens_carrinho, mrr, setup,
     """
     return html
 
-# --- MOTOR DE GERAÇÃO DO CONTRATO DOCX ---
 def gerar_documento_contrato(lead_dados, mrr_formatado, setup_formatado, condicao_txt):
     try:
         from docx import Document
     except ImportError:
-        return None, "Biblioteca 'python-docx' não instalada. Avise o TI para atualizar o requirements.txt"
+        return None, "Biblioteca 'python-docx' não instalada."
 
-    import os
     caminho_template = "template_contrato.docx"
     if not os.path.exists(caminho_template):
-        return None, "Arquivo 'template_contrato.docx' não encontrado na raiz do projeto."
+        return None, "Arquivo 'template_contrato.docx' não encontrado na raiz."
 
     try:
         doc = Document(caminho_template)
@@ -366,7 +366,6 @@ def gerar_documento_contrato(lead_dados, mrr_formatado, setup_formatado, condica
         "{{DATA_ATUAL}}": hoje
     }
 
-    # Substitui preservando a formatação (Bold, Itálico) do parágrafo
     def substituir_nas_runs(paragraphs):
         for p in paragraphs:
             for tag, valor in substituicoes.items():
@@ -378,7 +377,6 @@ def gerar_documento_contrato(lead_dados, mrr_formatado, setup_formatado, condica
                         p.text = p.text.replace(tag, valor)
 
     substituir_nas_runs(doc.paragraphs)
-    
     for table in doc.tables:
         for row in table.rows:
             for cell in row.cells:
@@ -388,3 +386,47 @@ def gerar_documento_contrato(lead_dados, mrr_formatado, setup_formatado, condica
     doc.save(buffer)
     buffer.seek(0)
     return buffer.getvalue(), None
+
+# --- NOVA INTEGRAÇÃO: ZAPSIGN ---
+def enviar_para_zapsign(docx_bytes, nome_cliente, email_cliente, telefone_cliente):
+    try:
+        if "zapsign" not in st.secrets or "token" not in st.secrets["zapsign"]:
+            return False, "⚠️ Token da ZapSign não configurado no painel do Streamlit."
+
+        token = st.secrets["zapsign"]["token"]
+        url = f"https://api.zapsign.com.br/api/v1/docs/?api_token={token}"
+
+        # O ZapSign lê o documento em base64
+        base64_doc = base64.b64encode(docx_bytes).decode('utf-8')
+        
+        # Formatando o telefone para a API (Remover DDD e colocar +55)
+        tel_formatado = re.sub(r'\D', '', str(telefone_cliente))
+        
+        signer = {"name": nome_cliente}
+        
+        # A ZapSign pode notificar via Email ou Whatsapp
+        if email_cliente:
+            signer["email"] = email_cliente
+            signer["send_via"] = "email"
+            
+        if len(tel_formatado) >= 10:
+            signer["phone_country"] = "55"
+            signer["phone_number"] = tel_formatado
+            if not email_cliente:
+                signer["send_via"] = "whatsapp" # Se tiver só telefone, força o link por whats
+
+        payload = {
+            "name": f"Contrato Khronos - {nome_cliente}",
+            "base64_pdf": f"data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,{base64_doc}",
+            "signers": [signer]
+        }
+
+        response = requests.post(url, json=payload, headers={"Content-Type": "application/json"})
+
+        if response.status_code == 200:
+            return True, "Enviado com Sucesso para o cliente assinar!"
+        else:
+            return False, f"Falha ZapSign: Verifique seu Token."
+            
+    except Exception as e:
+        return False, f"Erro na integração: {str(e)}"
