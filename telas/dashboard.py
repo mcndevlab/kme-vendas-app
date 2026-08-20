@@ -296,7 +296,7 @@ def tela_principal():
                 
                 camada_deck = pdk.Layer("ScatterplotLayer", data=df_agrupado, get_position='[lon, lat]', get_color='cor_rgba', get_radius='raio_tamanho', pickable=True)
                 visao_inicial = pdk.ViewState(latitude=df_agrupado['lat'].mean(), longitude=df_agrupado['lon'].mean(), zoom=10, pitch=0)
-                st.pydeck_chart(pdk.Deck(map_style=None, initial_view_state=visao_inicial, layers=[camada_deck], tooltip={"html": "<b>{Qtd} Lead(s) neste local:</b><br/>{Nomes}", "style": {"backgroundColor": "#1e293b", "color": "white"}}))
+                st.pydeck_chart(pdk.Deck(map_style=None, initial_view_state=visao_inicial, layers=[camada_deck], tooltip={"html": "<b>{Qtd} Cliente(s) neste local:</b><br/>{Nomes}", "style": {"backgroundColor": "#1e293b", "color": "white"}}))
                 st.caption(f"📍 Mostrando a localização exata de **{len(df_mapa)} cliente(s)**.")
             else: st.info("Nenhuma localização válida com os filtros selecionados.")
         else: st.info("Nenhum cliente com localização registrada.")
@@ -754,9 +754,13 @@ def tela_principal():
                     with c_d2: st.number_input(f"Alarme (%) [Máx: {lim_a:.0f}%]", min_value=0.0, max_value=float(lim_a), step=0.5, key="desc_alarme")
                     with c_d3: st.number_input(f"Imagem (%) [Máx: {lim_i:.0f}%]", min_value=0.0, max_value=float(lim_i), step=0.5, key="desc_imagem")
                 
-                unidade_selecionada = st.selectbox("🏢 Unidade de Mão de Obra", unidades_disponiveis, index=None, placeholder="Selecione a unidade de MO", key="unidade_mo_selecionada")
-                if not unidade_selecionada:
-                    st.markdown('<p style="color:#d90429; font-size:0.85rem; margin-top:-10px; font-weight:600;">⚠️ Selecione a unidade de MO.</p>', unsafe_allow_html=True)
+                unidade_selecionada = st.selectbox(
+                    "🏢 Unidade de Mão de Obra", 
+                    unidades_disponiveis, 
+                    index=None, 
+                    placeholder="⚠️ Selecione a unidade de MO", 
+                    key="unidade_mo_selecionada"
+                )
 
             with col_produtos:
                 st.write("### ➕ Catálogo")
