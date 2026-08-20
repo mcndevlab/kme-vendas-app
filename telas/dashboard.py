@@ -550,17 +550,16 @@ def tela_principal():
                     with c5: st.write(mrr)
                     with c6: st.write(setup)
                     with c7:
-                        itens_para_html = [{"quantidade": it["Qtd"], "nome": it["Produto / Serviço"]} for it in extrair_tabela_crm_itens(row.get('Itens_Orcamento', ''))]
-                        condicao_txt = f"{str(row.get('Parcelas', '1x'))} de {str(row.get('Valor_Parcela', 'R$ 0,00'))} ({str(row.get('Forma_Pagamento', 'Boleto'))})"
-                        html_prop = gerar_html_proposta(cliente, nome_prop, vendedor, itens_para_html, mrr, setup, condicao_txt)
-                        
-                        # Recuperar o Lead real para injetar no contrato
+                        # RECUPERA O LEAD PARA INJETAR NO CONTRATO DA TABELA
                         lead_para_contrato = {"nome": cliente}
                         match_lead = df_leads[df_leads['Nome_Razao'].astype(str).str.strip() == cliente.strip()]
                         if not match_lead.empty:
                             lr = match_lead.iloc[0]
                             lead_para_contrato = {"nome": str(lr.get("Nome_Razao", "")), "cpf_cnpj": str(lr.get("CPF_CNPJ", "")).replace('nan', ''), "endereco": str(lr.get("Endereco", "")).replace('nan', ''), "numero": str(lr.get("Numero", "")).replace('nan', ''), "cidade": str(lr.get("Cidade", "")).replace('nan', ''), "estado": str(lr.get("Estado", "")).replace('nan', ''), "telefone": str(lr.get("Telefone", "")).replace('nan', ''), "email_cliente": str(lr.get("Email_Cliente", "")).replace('nan', '')}
                             
+                        itens_para_html = [{"quantidade": it["Qtd"], "nome": it["Produto / Serviço"]} for it in extrair_tabela_crm_itens(row.get('Itens_Orcamento', ''))]
+                        condicao_txt = f"{str(row.get('Parcelas', '1x'))} de {str(row.get('Valor_Parcela', 'R$ 0,00'))} ({str(row.get('Forma_Pagamento', 'Boleto'))})"
+                        html_prop = gerar_html_proposta(cliente, nome_prop, vendedor, itens_para_html, mrr, setup, condicao_txt)
                         docx_bytes, erro_docx = gerar_documento_contrato(lead_para_contrato, mrr, setup, condicao_txt)
                         
                         c_b1, c_b2 = st.columns(2)
@@ -603,16 +602,16 @@ def tela_principal():
                         if itens_crm: st.write("---"); st.markdown("📋 **Itens do Projeto para CRM:**"); st.dataframe(itens_crm, use_container_width=True, hide_index=True)
                         st.write("")
                         
-                        itens_para_html = [{"quantidade": it["Qtd"], "nome": it["Produto / Serviço"]} for it in extrair_tabela_crm_itens(row.get('Itens_Orcamento', ''))]
-                        condicao_txt = f"{str(row.get('Parcelas', '1x'))} de {str(row.get('Valor_Parcela', 'R$ 0,00'))} ({str(row.get('Forma_Pagamento', 'Boleto'))})"
-                        html_prop = gerar_html_proposta(cliente, nome_prop, vendedor, itens_para_html, mrr, setup, condicao_txt)
-                        
+                        # RECUPERA O LEAD PARA INJETAR NO CONTRATO DOS CARTÕES
                         lead_para_contrato = {"nome": cliente}
                         match_lead = df_leads[df_leads['Nome_Razao'].astype(str).str.strip() == cliente.strip()]
                         if not match_lead.empty:
                             lr = match_lead.iloc[0]
                             lead_para_contrato = {"nome": str(lr.get("Nome_Razao", "")), "cpf_cnpj": str(lr.get("CPF_CNPJ", "")).replace('nan', ''), "endereco": str(lr.get("Endereco", "")).replace('nan', ''), "numero": str(lr.get("Numero", "")).replace('nan', ''), "cidade": str(lr.get("Cidade", "")).replace('nan', ''), "estado": str(lr.get("Estado", "")).replace('nan', ''), "telefone": str(lr.get("Telefone", "")).replace('nan', ''), "email_cliente": str(lr.get("Email_Cliente", "")).replace('nan', '')}
                             
+                        itens_para_html = [{"quantidade": it["Qtd"], "nome": it["Produto / Serviço"]} for it in extrair_tabela_crm_itens(row.get('Itens_Orcamento', ''))]
+                        condicao_txt = f"{str(row.get('Parcelas', '1x'))} de {str(row.get('Valor_Parcela', 'R$ 0,00'))} ({str(row.get('Forma_Pagamento', 'Boleto'))})"
+                        html_prop = gerar_html_proposta(cliente, nome_prop, vendedor, itens_para_html, mrr, setup, condicao_txt)
                         docx_bytes, erro_docx = gerar_documento_contrato(lead_para_contrato, mrr, setup, condicao_txt)
                         
                         c_b1, c_b2, c_b3 = st.columns(3)
@@ -1031,7 +1030,7 @@ def tela_principal():
                     if docx_bytes:
                         st.download_button("📝 Baixar Contrato", data=docx_bytes, file_name=f"Contrato_{st.session_state['lead_dados'].get('nome', '')}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True, type="primary")
                     else:
-                        st.button("📝 Erro no Contrato", disabled=True, help=erro_docx, use_container_width=True, type="primary")
+                        st.button("📝 Erro no Contrato", disabled=True, help=str(erro_docx), use_container_width=True, type="primary")
 
             else: st.info("Adicione itens no carrinho para gerar o parcelamento.")
         except Exception as e: st.error(f"❌ Erro na conexão: {e}")
