@@ -19,7 +19,7 @@ from modulos.utils import (padronizar_nome, padronizar_telefone, extrair_tabela_
                            validar_inconsistencias_carrinho, calcular_novos_valores_proposta,
                            obter_detalhes_split, obter_emails_gestores, enviar_email_aprovacao, 
                            converter_para_numero, gerar_html_proposta, enviar_email_proposta_cliente,
-                           gerar_documento_contrato, enviar_para_zapsign)
+                           gerar_documento_contrato, enviar_para_zapsign, validar_cpf, validar_cnpj, formatar_documento)
 
 def carregar_proposta_para_simulador(idx_planilha, dados_prop, df_produtos, df_leads):
     novo_carrinho = []
@@ -47,7 +47,7 @@ def carregar_proposta_para_simulador(idx_planilha, dados_prop, df_produtos, df_l
     lead_row = df_leads[df_leads['Nome_Razao'].astype(str).str.strip() == nome_cliente]
     if not lead_row.empty:
         lr = lead_row.iloc[0]
-        st.session_state["lead_dados"] = {"data_cadastro": str(lr.get("Data_Cadastro", "")), "nome": str(lr.get("Nome_Razao", "")), "cpf_cnpj": str(lr.get("CPF_CNPJ", "")).replace('nan', ''), "endereco": str(lr.get("Endereco", "")).replace('nan', ''), "numero": str(lr.get("Numero", "")).replace('nan', ''), "cidade": str(lr.get("Cidade", "")).replace('nan', ''), "estado": str(lr.get("Estado", "")).replace('nan', ''), "telefone": str(lr.get("Telefone", "")).replace('nan', ''), "contato": str(lr.get("Contato", "")).replace('nan', ''), "email_cliente": str(lr.get("Email_Cliente", "")).replace('nan', ''), "gps": str(lr.get("Coordenadas_GPS", "")).replace('nan', '')}
+        st.session_state["lead_dados"] = {"data_cadastro": str(lr.get("Data_Cadastro", "")), "nome": str(lr.get("Nome_Razao", "")), "cpf_cnpj": str(lr.get("CPF_CNPJ", "")).replace('nan', ''), "data_nascimento": str(lr.get("Data_Nascimento", "")).replace('nan', ''), "endereco": str(lr.get("Endereco", "")).replace('nan', ''), "numero": str(lr.get("Numero", "")).replace('nan', ''), "cidade": str(lr.get("Cidade", "")).replace('nan', ''), "estado": str(lr.get("Estado", "")).replace('nan', ''), "telefone": str(lr.get("Telefone", "")).replace('nan', ''), "contato": str(lr.get("Contato", "")).replace('nan', ''), "email_cliente": str(lr.get("Email_Cliente", "")).replace('nan', ''), "gps": str(lr.get("Coordenadas_GPS", "")).replace('nan', '')}
         st.session_state["editando_lead_idx"] = lead_row.index[0] + 2 
     else:
         st.session_state["lead_dados"] = {"nome": nome_cliente}
@@ -565,14 +565,14 @@ def tela_principal():
                         html_prop = gerar_html_proposta(cliente, nome_prop, vendedor, itens_para_html, mrr, setup, condicao_txt)
                         docx_bytes, erro_docx = gerar_documento_contrato(lead_para_contrato, mrr, setup, condicao_txt)
                         
-                        c_b1, c_b2 = st.columns(2)
+                        c_b1, c_b2, c_b3 = st.columns(3)
                         with c_b1:
-                            st.download_button("📄 PDF", data=html_prop, file_name=f"Proposta_{cliente}.html", mime="text/html", use_container_width=True, key=f"dl_tab_{linha_real_planilha}")
+                            st.download_button("📄 Download Proposta", data=html_prop, file_name=f"Proposta_{cliente}.html", mime="text/html", use_container_width=True, type="primary", key=f"dl_tab_{linha_real_planilha}")
                         with c_b2:
-                            if docx_bytes: st.download_button("📝 DOCX", data=docx_bytes, file_name=f"Contrato_{cliente}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True, key=f"dl_cx_{linha_real_planilha}")
-                        
-                        if status == "Em Negociação":
-                            if st.button("🔄 Renovar", key=f"ren_tab_{linha_real_planilha}", use_container_width=True): st.session_state["renovar_proposta_idx"] = linha_real_planilha; st.session_state["renovar_proposta_dados"] = row.to_dict(); st.rerun()
+                            if docx_bytes: st.download_button("📝 Download Contrato", data=docx_bytes, file_name=f"Contrato_{cliente}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True, type="primary", key=f"dl_cx_{linha_real_planilha}")
+                        with c_b3:
+                            if status == "Em Negociação":
+                                if st.button("🔄 Editar", key=f"ren_tab_{linha_real_planilha}", type="primary", use_container_width=True): st.session_state["renovar_proposta_idx"] = linha_real_planilha; st.session_state["renovar_proposta_dados"] = row.to_dict(); st.rerun()
             else:
                 for idx, row in df_prop.iterrows():
                     linha_real_planilha = row.name + 2 
@@ -685,10 +685,10 @@ def tela_principal():
                         btn1, btn2 = st.columns([7, 3])
                         with btn1:
                             if st.button("Proposta", key=f"btn_lead_{idx}", use_container_width=True): 
-                                st.session_state.update({"lead_dados": {"data_cadastro": data_cad, "nome": nome, "cpf_cnpj": str(row.get('CPF_CNPJ', '')).replace('nan', ''), "endereco": str(row.get('Endereco', '')).replace('nan', ''), "numero": str(row.get('Numero', '')).replace('nan', ''), "cidade": str(row.get('Cidade', '')).replace('nan', ''), "estado": str(row.get("Estado", "")).replace('nan', ''), "telefone": telefone, "email_cliente": str(row.get('Email_Cliente', '')).replace('nan', ''), "contato": str(row.get('Contato', '')).replace('nan', ''), "gps": str(row.get("Coordenadas_GPS", "")).replace('nan', '')}, "lead_salvo": True, "gatilho_limpar_carrinho": True, "etapa_atual": "simulador", "editando_lead_idx": linha_real_planilha, "nome_proposta_atual": "", "temp_proposta_atual": "Selecione...", "status_proposta_atual": "Selecione...", "status_credito_deps": None}); st.rerun()
+                                st.session_state.update({"lead_dados": {"data_cadastro": data_cad, "nome": nome, "cpf_cnpj": str(row.get('CPF_CNPJ', '')).replace('nan', ''), "data_nascimento": str(row.get("Data_Nascimento", "")).replace('nan', ''), "endereco": str(row.get('Endereco', '')).replace('nan', ''), "numero": str(row.get('Numero', '')).replace('nan', ''), "cidade": str(row.get('Cidade', '')).replace('nan', ''), "estado": str(row.get("Estado", "")).replace('nan', ''), "telefone": telefone, "email_cliente": str(row.get('Email_Cliente', '')).replace('nan', ''), "contato": str(row.get('Contato', '')).replace('nan', ''), "gps": str(row.get("Coordenadas_GPS", "")).replace('nan', '')}, "lead_salvo": True, "gatilho_limpar_carrinho": True, "etapa_atual": "simulador", "editando_lead_idx": linha_real_planilha, "nome_proposta_atual": "", "temp_proposta_atual": "Selecione...", "status_proposta_atual": "Selecione...", "status_credito_deps": None}); st.rerun()
                         with btn2:
                             if st.button("✏️", help="Editar", key=f"btn_edit_lead_{idx}", use_container_width=True): 
-                                st.session_state.update({"lead_dados": {"data_cadastro": data_cad, "nome": nome, "cpf_cnpj": str(row.get('CPF_CNPJ', '')).replace('nan', ''), "endereco": str(row.get('Endereco', '')).replace('nan', ''), "numero": str(row.get('Numero', '')).replace('nan', ''), "cidade": str(row.get('Cidade', '')).replace('nan', ''), "estado": str(row.get("Estado", "")).replace('nan', ''), "telefone": telefone, "email_cliente": str(row.get('Email_Cliente', '')).replace('nan', ''), "contato": str(row.get('Contato', '')).replace('nan', ''), "gps": str(row.get("Coordenadas_GPS", "")).replace('nan', '')}, "lead_salvo": True, "etapa_atual": "lead", "editando_lead_idx": linha_real_planilha}); st.rerun()
+                                st.session_state.update({"lead_dados": {"data_cadastro": data_cad, "nome": nome, "cpf_cnpj": str(row.get('CPF_CNPJ', '')).replace('nan', ''), "data_nascimento": str(row.get("Data_Nascimento", "")).replace('nan', ''), "endereco": str(row.get('Endereco', '')).replace('nan', ''), "numero": str(row.get('Numero', '')).replace('nan', ''), "cidade": str(row.get('Cidade', '')).replace('nan', ''), "estado": str(row.get("Estado", "")).replace('nan', ''), "telefone": telefone, "email_cliente": str(row.get('Email_Cliente', '')).replace('nan', ''), "contato": str(row.get('Contato', '')).replace('nan', ''), "gps": str(row.get("Coordenadas_GPS", "")).replace('nan', '')}, "lead_salvo": True, "etapa_atual": "lead", "editando_lead_idx": linha_real_planilha}); st.rerun()
 
             else:
                 for idx, row in df_leads.iterrows():
@@ -712,10 +712,10 @@ def tela_principal():
                         c_b1, c_b2 = st.columns([7, 3])
                         with c_b1:
                             if st.button("➕ Criar Proposta", key=f"btn_lead_{idx}", type="primary", use_container_width=True): 
-                                st.session_state.update({"lead_dados": {"data_cadastro": data_cad, "nome": nome, "cpf_cnpj": str(row.get('CPF_CNPJ', '')).replace('nan', ''), "endereco": str(row.get('Endereco', '')).replace('nan', ''), "numero": str(row.get('Numero', '')).replace('nan', ''), "cidade": str(row.get('Cidade', '')).replace('nan', ''), "estado": str(row.get("Estado", "")).replace('nan', ''), "telefone": telefone, "email_cliente": str(row.get('Email_Cliente', '')).replace('nan', ''), "contato": str(row.get('Contato', '')).replace('nan', ''), "gps": str(row.get("Coordenadas_GPS", "")).replace('nan', '')}, "lead_salvo": True, "gatilho_limpar_carrinho": True, "etapa_atual": "simulador", "editando_lead_idx": linha_real_planilha, "nome_proposta_atual": "", "temp_proposta_atual": "Selecione...", "status_proposta_atual": "Selecione...", "status_credito_deps": None}); st.rerun()
+                                st.session_state.update({"lead_dados": {"data_cadastro": data_cad, "nome": nome, "cpf_cnpj": str(row.get('CPF_CNPJ', '')).replace('nan', ''), "data_nascimento": str(row.get("Data_Nascimento", "")).replace('nan', ''), "endereco": str(row.get('Endereco', '')).replace('nan', ''), "numero": str(row.get('Numero', '')).replace('nan', ''), "cidade": str(row.get('Cidade', '')).replace('nan', ''), "estado": str(row.get("Estado", "")).replace('nan', ''), "telefone": telefone, "email_cliente": str(row.get('Email_Cliente', '')).replace('nan', ''), "contato": str(row.get('Contato', '')).replace('nan', ''), "gps": str(row.get("Coordenadas_GPS", "")).replace('nan', '')}, "lead_salvo": True, "gatilho_limpar_carrinho": True, "etapa_atual": "simulador", "editando_lead_idx": linha_real_planilha, "nome_proposta_atual": "", "temp_proposta_atual": "Selecione...", "status_proposta_atual": "Selecione...", "status_credito_deps": None}); st.rerun()
                         with c_b2:
                             if st.button("✏️ Editar", key=f"btn_edit_lead_{idx}", use_container_width=True): 
-                                st.session_state.update({"lead_dados": {"data_cadastro": data_cad, "nome": nome, "cpf_cnpj": str(row.get('CPF_CNPJ', '')).replace('nan', ''), "endereco": str(row.get('Endereco', '')).replace('nan', ''), "numero": str(row.get('Numero', '')).replace('nan', ''), "cidade": str(row.get('Cidade', '')).replace('nan', ''), "estado": str(row.get("Estado", "")).replace('nan', ''), "telefone": telefone, "email_cliente": str(row.get('Email_Cliente', '')).replace('nan', ''), "contato": str(row.get('Contato', '')).replace('nan', ''), "gps": str(row.get("Coordenadas_GPS", "")).replace('nan', '')}, "lead_salvo": True, "etapa_atual": "lead", "editando_lead_idx": linha_real_planilha}); st.rerun()
+                                st.session_state.update({"lead_dados": {"data_cadastro": data_cad, "nome": nome, "cpf_cnpj": str(row.get('CPF_CNPJ', '')).replace('nan', ''), "data_nascimento": str(row.get("Data_Nascimento", "")).replace('nan', ''), "endereco": str(row.get('Endereco', '')).replace('nan', ''), "numero": str(row.get('Numero', '')).replace('nan', ''), "cidade": str(row.get('Cidade', '')).replace('nan', ''), "estado": str(row.get("Estado", "")).replace('nan', ''), "telefone": telefone, "email_cliente": str(row.get('Email_Cliente', '')).replace('nan', ''), "contato": str(row.get('Contato', '')).replace('nan', ''), "gps": str(row.get("Coordenadas_GPS", "")).replace('nan', '')}, "lead_salvo": True, "etapa_atual": "lead", "editando_lead_idx": linha_real_planilha}); st.rerun()
 
     elif st.session_state["etapa_atual"] == "lead":
         idx_editando_lead = st.session_state.get("editando_lead_idx")
@@ -743,31 +743,87 @@ def tela_principal():
             st.success("✅ Localização capturada!")
 
         ld = st.session_state["lead_dados"]
-        with st.form("form_lead"):
-            c1, c2 = st.columns(2)
-            nome, cpf_cnpj = c1.text_input("Nome / Razão Social *", value=ld.get("nome", "")), c2.text_input("CPF / CNPJ", value=ld.get("cpf_cnpj", ""))
-            c3, c4, c5 = st.columns([4, 2, 3])
-            endereco, numero, telefone = c3.text_input("Endereço *", value=ld.get("endereco", "")), c4.text_input("Número *", value=ld.get("numero", "")), c5.text_input("Telefone *", value=ld.get("telefone", ""), max_chars=15)
+        
+        # Define se já é um CPF ou CNPJ baseado no que tem salvo
+        doc_atual = re.sub(r'\D', '', str(ld.get("cpf_cnpj", "")))
+        idx_tipo = 1 if len(doc_atual) > 11 else 0
+        tipo_pessoa = st.radio("Tipo de Cliente:", ["Pessoa Física (CPF)", "Pessoa Jurídica (CNPJ)"], index=idx_tipo, horizontal=True)
+
+        with st.container(border=True):
+            if "CPF" in tipo_pessoa:
+                c1, c2, c3 = st.columns([4, 3, 3])
+                nome = c1.text_input("Nome Completo *", value=ld.get("nome", ""))
+                cpf_cnpj = c2.text_input("CPF *", value=ld.get("cpf_cnpj", ""), max_chars=14, placeholder="000.000.000-00")
+                data_nasc = c3.text_input("Data de Nascimento *", value=ld.get("data_nascimento", ""), max_chars=10, placeholder="DD/MM/AAAA")
+            else:
+                c1, c2 = st.columns([6, 4])
+                nome = c1.text_input("Razão Social *", value=ld.get("nome", ""))
+                cpf_cnpj = c2.text_input("CNPJ *", value=ld.get("cpf_cnpj", ""), max_chars=18, placeholder="00.000.000/0000-00")
+                data_nasc = ""
+
+            c3_b, c4, c5 = st.columns([4, 2, 3])
+            endereco = c3_b.text_input("Endereço *", value=ld.get("endereco", ""))
+            numero = c4.text_input("Número *", value=ld.get("numero", ""))
+            telefone = c5.text_input("Telefone *", value=ld.get("telefone", ""), max_chars=15)
+            
             c6, c7, c8 = st.columns([3, 1, 4])
             cidade = c6.text_input("Cidade", value=ld.get("cidade", ""))
             estados_br = ["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"]
             estado = c7.selectbox("Estado", estados_br, index=estados_br.index(ld.get("estado", "SC").upper()) if ld.get("estado", "SC").upper() in estados_br else estados_br.index("SC"))
-            contato, email_cliente = c8.text_input("Nome do Contato", value=ld.get("contato", "")), st.text_input("✉️ E-mail do Cliente", value=ld.get("email_cliente", ""))
+            contato = c8.text_input("Nome do Contato", value=ld.get("contato", ""))
+            email_cliente = st.text_input("✉️ E-mail do Cliente", value=ld.get("email_cliente", ""))
             gps_final = gps_audit if gps_audit else ld.get("gps", "")
             
-            if st.form_submit_button("Atualizar Dados do Cliente ➡️" if idx_editando_lead else "Salvar Cliente e Iniciar Proposta ➡️", type="primary", use_container_width=True):
-                tel_numeros, email_valido = re.sub(r'\D', '', telefone), False if email_cliente and not re.match(r'^[\w\.-]+@[\w\.-]+\.\w+$', email_cliente) else True
-                if not nome or not endereco or not numero or not telefone: st.error("⚠️ Atenção: Preencha todos os campos marcados com (*).")
-                elif len(tel_numeros) < 10 or len(tel_numeros) > 11: st.error("⚠️ Atenção: O Telefone deve conter o DDD + Número válido (10 ou 11 dígitos).")
-                elif not email_valido: st.error("⚠️ Atenção: O E-mail digitado é inválido.")
-                elif not (gps_audit if gps_audit else ld.get("gps", "")) and not idx_editando_lead: st.error("⚠️ Atenção: Valide sua localização clicando no ícone de GPS.")
+            st.write("")
+            if st.button("Atualizar Dados do Cliente ➡️" if idx_editando_lead else "Salvar Cliente e Iniciar Proposta ➡️", type="primary", use_container_width=True):
+                tel_numeros = re.sub(r'\D', '', telefone)
+                email_valido = False if email_cliente and not re.match(r'^[\w\.-]+@[\w\.-]+\.\w+$', email_cliente) else True
+                
+                doc_limpo = re.sub(r'\D', '', cpf_cnpj)
+                is_cpf = "CPF" in tipo_pessoa
+                doc_valido = validar_cpf(doc_limpo) if is_cpf else validar_cnpj(doc_limpo)
+                msg_doc = "CPF inválido." if is_cpf else "CNPJ inválido."
+                
+                nasc_valido = True
+                if is_cpf and data_nasc:
+                    if not re.match(r'^(0[1-9]|[12][0-9]|3[01])/(0[1-9]|1[012])/\d{4}$', data_nasc):
+                        nasc_valido = False
+                
+                if not nome or not endereco or not numero or not telefone or not cpf_cnpj: 
+                    st.error("⚠️ Atenção: Preencha todos os campos obrigatórios marcados com (*).")
+                elif is_cpf and not data_nasc:
+                    st.error("⚠️ Atenção: Preencha a Data de Nascimento para pessoa física.")
+                elif len(tel_numeros) < 10 or len(tel_numeros) > 11: 
+                    st.error("⚠️ Atenção: O Telefone deve conter o DDD + Número válido (10 ou 11 dígitos).")
+                elif not email_valido: 
+                    st.error("⚠️ Atenção: O E-mail digitado é inválido.")
+                elif not doc_valido:
+                    st.error(f"⚠️ Atenção: {msg_doc}")
+                elif is_cpf and not nasc_valido:
+                    st.error("⚠️ Atenção: A Data de Nascimento deve estar no formato DD/MM/AAAA.")
+                elif not (gps_audit if gps_audit else ld.get("gps", "")) and not idx_editando_lead: 
+                    st.error("⚠️ Atenção: Valide sua localização clicando no ícone de GPS.")
                 else:
-                    st.session_state["lead_dados"].update({"nome": padronizar_nome(nome), "cpf_cnpj": cpf_cnpj, "endereco": padronizar_nome(endereco), "numero": numero, "cidade": padronizar_nome(cidade), "estado": estado, "telefone": padronizar_telefone(telefone), "contato": padronizar_nome(contato), "email_cliente": email_cliente, "gps": gps_audit if gps_audit else ld.get("gps", "")})
+                    doc_formatado = formatar_documento(doc_limpo, "CPF" if is_cpf else "CNPJ")
+                    st.session_state["lead_dados"].update({
+                        "nome": padronizar_nome(nome), 
+                        "cpf_cnpj": doc_formatado, 
+                        "data_nascimento": data_nasc if is_cpf else "",
+                        "endereco": padronizar_nome(endereco), 
+                        "numero": numero, 
+                        "cidade": padronizar_nome(cidade), 
+                        "estado": estado, 
+                        "telefone": padronizar_telefone(telefone), 
+                        "contato": padronizar_nome(contato), 
+                        "email_cliente": email_cliente, 
+                        "gps": gps_audit if gps_audit else ld.get("gps", "")
+                    })
+                    
                     if idx_editando_lead:
                         if atualizar_lead(idx_editando_lead, st.session_state["lead_dados"]): st.toast("Cliente atualizado!"); st.cache_data.clear(); st.session_state["etapa_atual"] = "meus_leads"; st.rerun()
                     else:
                         novo_idx = salvar_lead(st.session_state["lead_dados"], st.session_state["nome_usuario"], st.session_state["email_usuario"])
-                        if novo_idx: st.session_state.update({"lead_salvo": True, "etapa_atual": "simulador", "editando_lead_idx": novo_idx, "nome_proposta_atual": "", "temp_proposta_atual": "Selecione...", "status_proposta_atual": "Selecione..."}); st.toast("Cliente salvo!"); st.cache_data.clear(); st.rerun()
+                        if novo_idx: st.session_state.update({"lead_salvo": True, "etapa_atual": "simulador", "editando_lead_idx": novo_idx, "nome_proposta_atual": "", "temp_proposta_atual": "Selecione...", "status_proposta_atual": "Selecione...", "status_credito_deps": None}); st.toast("Cliente salvo!"); st.cache_data.clear(); st.rerun()
 
     elif st.session_state["etapa_atual"] == "simulador":
         st.title("🛒 2. Simulador de Vendas")
