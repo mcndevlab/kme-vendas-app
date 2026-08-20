@@ -562,14 +562,14 @@ def tela_principal():
                         html_prop = gerar_html_proposta(cliente, nome_prop, vendedor, itens_para_html, mrr, setup, condicao_txt)
                         docx_bytes, erro_docx = gerar_documento_contrato(lead_para_contrato, mrr, setup, condicao_txt)
                         
-                        c_b1, c_b2 = st.columns(2)
+                        c_b1, c_b2, c_b3 = st.columns(3)
                         with c_b1:
-                            st.download_button("📄 PDF", data=html_prop, file_name=f"Proposta_{cliente}.html", mime="text/html", use_container_width=True, key=f"dl_tab_{linha_real_planilha}")
+                            st.download_button("📄 Download Proposta", data=html_prop, file_name=f"Proposta_{cliente}.html", mime="text/html", use_container_width=True, type="primary", key=f"dl_tab_{linha_real_planilha}")
                         with c_b2:
-                            if docx_bytes: st.download_button("📝 DOCX", data=docx_bytes, file_name=f"Contrato_{cliente}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True, key=f"dl_cx_{linha_real_planilha}")
-                        
-                        if status == "Em Negociação":
-                            if st.button("🔄 Renovar", key=f"ren_tab_{linha_real_planilha}", use_container_width=True): st.session_state["renovar_proposta_idx"] = linha_real_planilha; st.session_state["renovar_proposta_dados"] = row.to_dict(); st.rerun()
+                            if docx_bytes: st.download_button("📝 Download Contrato", data=docx_bytes, file_name=f"Contrato_{cliente}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True, type="primary", key=f"dl_cx_{linha_real_planilha}")
+                        with c_b3:
+                            if status == "Em Negociação":
+                                if st.button("🔄 Editar", key=f"ren_tab_{linha_real_planilha}", type="primary", use_container_width=True): st.session_state["renovar_proposta_idx"] = linha_real_planilha; st.session_state["renovar_proposta_dados"] = row.to_dict(); st.rerun()
             else:
                 for idx, row in df_prop.iterrows():
                     linha_real_planilha = row.name + 2 
@@ -616,9 +616,9 @@ def tela_principal():
                         
                         c_b1, c_b2, c_b3 = st.columns(3)
                         with c_b1:
-                            st.download_button("📄 Proposta", data=html_prop, file_name=f"Proposta_{cliente}.html", mime="text/html", use_container_width=True, key=f"dl_card_{linha_real_planilha}")
+                            st.download_button("📄 Download Proposta", data=html_prop, file_name=f"Proposta_{cliente}.html", mime="text/html", use_container_width=True, type="primary", key=f"dl_card_{linha_real_planilha}")
                         with c_b2:
-                            if docx_bytes: st.download_button("📝 Contrato", data=docx_bytes, file_name=f"Contrato_{cliente}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True, key=f"dl_cx_card_{linha_real_planilha}")
+                            if docx_bytes: st.download_button("📝 Download Contrato", data=docx_bytes, file_name=f"Contrato_{cliente}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True, type="primary", key=f"dl_cx_card_{linha_real_planilha}")
                         with c_b3:
                             if status == "Em Negociação":
                                 if st.button("🔄 Editar", key=f"ren_tab_{linha_real_planilha}", type="primary", use_container_width=True): st.session_state["renovar_proposta_idx"] = linha_real_planilha; st.session_state["renovar_proposta_dados"] = row.to_dict(); st.rerun()
