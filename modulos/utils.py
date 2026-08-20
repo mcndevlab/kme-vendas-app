@@ -1,6 +1,6 @@
 import pandas as pd
 import re
-import os  # <-- O culpado estava faltando aqui!
+import os
 import smtplib
 import io
 import base64
@@ -246,6 +246,44 @@ def enviar_email_proposta_cliente(nome_cliente, email_destino, html_conteudo):
         return True
     except Exception as e:
         st.error(f"Erro ao disparar email para o cliente: {e}")
+        return False
+
+# --- NOVA FUNÇÃO DE EMAIL DE RECUPERAÇÃO DE SENHA ---
+def enviar_email_recuperacao_senha(email_destino, senha_atual):
+    try:
+        if "smtp" not in st.secrets:
+            st.info(f"💡 Simulação de Recuperação! Senha enviada seria: {senha_atual}")
+            return True
+            
+        remetente = st.secrets["smtp"]["email"]
+        senha = st.secrets["smtp"]["password"]
+        servidor = st.secrets["smtp"]["server"]
+        porta = st.secrets["smtp"]["port"]
+
+        msg = MIMEMultipart()
+        msg['From'] = remetente
+        msg['To'] = email_destino
+        msg['Subject'] = "Khronos Sales - Recuperação de Senha"
+
+        html = f"""
+        <div style="font-family: Arial, sans-serif; color: #1e293b;">
+            <h2 style="color: #e20613;">Recuperação de Senha</h2>
+            <p>Olá,</p>
+            <p>Você solicitou a recuperação da sua senha de acesso ao portal Khronos Sales.</p>
+            <p>Sua senha atual é: <strong>{senha_atual}</strong></p>
+            <br>
+            <p><i>Recomendamos que você anote sua senha em um local seguro.</i></p>
+        </div>
+        """
+        msg.attach(MIMEText(html, 'html'))
+        server = smtplib.SMTP(servidor, porta)
+        server.starttls()
+        server.login(remetente, senha)
+        server.sendmail(remetente, [email_destino], msg.as_string())
+        server.quit()
+        return True
+    except Exception as e:
+        st.error(f"Erro ao disparar email de recuperação: {e}")
         return False
 
 def gerar_html_proposta(cliente, proposta, vendedor, itens_carrinho, mrr, setup, condicao_texto):
