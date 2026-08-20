@@ -10,6 +10,36 @@ from email.mime.multipart import MIMEMultipart
 import streamlit as st
 import datetime
 
+# --- NOVAS FUNÇÕES DE VALIDAÇÃO E FORMATAÇÃO ---
+def validar_cpf(cpf):
+    cpf = re.sub(r'\D', '', str(cpf))
+    if len(cpf) != 11 or len(set(cpf)) == 1: return False
+    for i in range(9, 11):
+        value = sum((int(cpf[num]) * ((i+1) - num) for num in range(0, i)))
+        digit = ((value * 10) % 11) % 10
+        if digit != int(cpf[i]): return False
+    return True
+
+def validar_cnpj(cnpj):
+    cnpj = re.sub(r'\D', '', str(cnpj))
+    if len(cnpj) != 14 or len(set(cnpj)) == 1: return False
+    val = [6,5,4,3,2,9,8,7,6,5,4,3,2]
+    for i in range(12, 14):
+        soma = sum(int(cnpj[num]) * val[num + (14 - i) - 1] for num in range(i))
+        digito = 11 - (soma % 11)
+        if digito >= 10: digito = 0
+        if digito != int(cnpj[i]): return False
+    return True
+
+def formatar_documento(doc, tipo):
+    num = re.sub(r'\D', '', str(doc))
+    if tipo == "CPF" and len(num) == 11:
+        return f"{num[:3]}.{num[3:6]}.{num[6:9]}-{num[9:]}"
+    elif tipo == "CNPJ" and len(num) == 14:
+        return f"{num[:2]}.{num[2:5]}.{num[5:8]}/{num[8:12]}-{num[12:]}"
+    return doc
+
+# --- FUNÇÕES EXISTENTES ---
 def converter_para_numero(valor):
     if isinstance(valor, (int, float)): return float(valor)
     texto = str(valor).replace("R$", "").replace("%", "").strip()
@@ -251,7 +281,6 @@ def enviar_email_proposta_cliente(nome_cliente, email_destino, html_conteudo):
 def enviar_email_recuperacao_senha(email_destino, senha_atual):
     try:
         if "smtp" not in st.secrets:
-            # Removida a exibição da senha na tela por motivos de segurança!
             st.info("💡 E-mail de recuperação gerado com sucesso! (Configure SMTP no Cloud para envio real).")
             return True
             
