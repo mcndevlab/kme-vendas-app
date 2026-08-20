@@ -1,6 +1,7 @@
 import pandas as pd
 import re
 import smtplib
+import io
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import streamlit as st
@@ -155,7 +156,7 @@ def calcular_novos_valores_proposta(row_data, df_produtos, df_valor_sensor):
         elif "produto" in cat or "equipamento" in cat: bruto_prod += (v_u * qtd)
         else:
             if "imagem" in grupo: bruto_imagem += (v_u * qtd)
-            else: bruto_alarme += (v_u * qtd)
+            else: bruto_alarme += (v_u * item['quantidade'])
             
     novo_total_mrr, novo_total_setup = (bruto_alarme * (1 - desc_a)) + (bruto_imagem * (1 - desc_i)), (bruto_prod * (1 - desc_p)) + mao_obra
     return f"R$ {novo_total_mrr:,.2f}".replace(",", "_").replace(".", ",").replace("_", "."), f"R$ {novo_total_setup:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
@@ -216,7 +217,6 @@ def enviar_email_aprovacao(nome_consultor, unidade, vertical, valor_mrr, valor_e
         st.error(f"Erro ao disparar email: {e}")
         return False
 
-# Envia a proposta comercial diretamente para o e-mail do cliente
 def enviar_email_proposta_cliente(nome_cliente, email_destino, html_conteudo):
     try:
         if "smtp" not in st.secrets:
@@ -332,3 +332,59 @@ def gerar_html_proposta(cliente, proposta, vendedor, itens_carrinho, mrr, setup,
     </html>
     """
     return html
+
+# --- MOTOR DE GERAÇÃO DO CONTRATO DOCX ---
+def gerar_documento_contrato(lead_dados, mrr_formatado, setup_formatado, condicao_txt):
+    try:
+        from docx import Document
+    except ImportError:
+        return None, "Biblioteca 'python-docx' não instalada. Avise o TI para atualizar o requirements.txt"
+
+    import os
+    caminho_template = "template_contrato.docx"
+    if not os.path.exists(caminho_template):
+        return None, "Arquivo 'template_contrato.docx' não encontrado na raiz do projeto."
+
+    try:
+        doc = Document(caminho_template)
+    except Exception as e:
+        return None, f"Erro ao abrir o arquivo Word original: {e}"
+
+    hoje = datetime.datetime.now().strftime("%d/%m/%Y")
+    
+    substituicoes = {
+        "{{NOME_CLIENTE}}": str(lead_dados.get("nome", "")),
+        "{{CPF_CNPJ}}": str(lead_dados.get("cpf_cnpj", "")),
+        "{{ENDERECO}}": f"{lead_dados.get('endereco', '')}, {lead_dados.get('numero', '')}",
+        "{{CIDADE}}": str(lead_dados.get("cidade", "")),
+        "{{ESTADO}}": str(lead_dados.get("estado", "")),
+        "{{TELEFONE}}": str(lead_dados.get("telefone", "")),
+        "{{EMAIL}}": str(lead_dados.get("email_cliente", "")),
+        "{{VALOR_MENSAL}}": str(mrr_formatado),
+        "{{VALOR_SETUP}}": str(setup_formatado),
+        "{{CONDICAO_PGTO}}": str(condicao_txt),
+        "{{DATA_ATUAL}}": hoje
+    }
+
+    # Substitui preservando a formatação (Bold, Itálico) do parágrafo
+    def substituir_nas_runs(paragraphs):
+        for p in paragraphs:
+            for tag, valor in substituicoes.items():
+                if tag in p.text:
+                    for run in p.runs:
+                        if tag in run.text:
+                            run.text = run.text.replace(tag, valor)
+                    if tag in p.text:
+                        p.text = p.text.replace(tag, valor)
+
+    substituir_nas_runs(doc.paragraphs)
+    
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                substituir_nas_runs(cell.paragraphs)
+
+    buffer = io.BytesIO()
+    doc.save(buffer)
+    buffer.seek(0)
+    return buffer.getvalue(), None
