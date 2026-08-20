@@ -37,8 +37,10 @@ def carregar_proposta_para_simulador(idx_planilha, dados_prop, df_produtos, df_l
     st.session_state["desc_alarme"] = converter_para_numero(dados_prop.get('Desc_Alarme', '0'))
     st.session_state["desc_imagem"] = converter_para_numero(dados_prop.get('Desc_Imagem', '0'))
     st.session_state["nome_proposta_atual"] = str(dados_prop.get('Nome_Proposta', ''))
-    st.session_state["temp_proposta_atual"] = str(dados_prop.get('Temperatura', 'Quente 🔥'))
-    st.session_state["status_proposta_atual"] = str(dados_prop.get('Status_Proposta', 'Em Negociação'))
+    
+    # Ao editar, recupera o status original
+    st.session_state["temp_proposta_atual"] = str(dados_prop.get('Temperatura', 'Selecione...'))
+    st.session_state["status_proposta_atual"] = str(dados_prop.get('Status_Proposta', 'Selecione...'))
     
     nome_cliente = str(dados_prop.get('Nome_Cliente', '')).strip()
     lead_row = df_leads[df_leads['Nome_Razao'].astype(str).str.strip() == nome_cliente]
@@ -265,7 +267,14 @@ def tela_principal():
         if st.button("🚪 Sair", use_container_width=True): st.session_state.clear(); st.rerun()
 
     if st.session_state.get("gatilho_limpar_tudo", False):
-        st.session_state.update({"carrinho": [], "desc_prod": 0.0, "desc_alarme": 0.0, "desc_imagem": 0.0, "lead_dados": {}, "lead_salvo": False, "renovar_proposta_idx": None, "proposta_idx_editando": None, "editando_lead_idx": None, "nome_proposta_atual": "", "temp_proposta_atual": "", "status_proposta_atual": "", "ultimo_gps_capturado": "", "item_aberto": None, "unidade_mo_selecionada": None, "gatilho_limpar_tudo": False})
+        st.session_state.update({
+            "carrinho": [], "desc_prod": 0.0, "desc_alarme": 0.0, "desc_imagem": 0.0, 
+            "lead_dados": {}, "lead_salvo": False, "renovar_proposta_idx": None, 
+            "proposta_idx_editando": None, "editando_lead_idx": None, "nome_proposta_atual": "", 
+            "temp_proposta_atual": "Selecione...", "status_proposta_atual": "Selecione...", 
+            "ultimo_gps_capturado": "", "item_aberto": None, "unidade_mo_selecionada": None, 
+            "gatilho_limpar_tudo": False
+        })
     if st.session_state.get("gatilho_limpar_carrinho", False):
         st.session_state.update({"carrinho": [], "desc_prod": 0.0, "desc_alarme": 0.0, "desc_imagem": 0.0, "item_aberto": None, "gatilho_limpar_carrinho": False})
     if st.session_state["msg_sucesso"] != "": st.success(st.session_state["msg_sucesso"]); st.session_state["msg_sucesso"] = ""
@@ -644,7 +653,7 @@ def tela_principal():
                         btn1, btn2 = st.columns([7, 3])
                         with btn1:
                             if st.button("Proposta", key=f"btn_lead_{idx}", use_container_width=True): 
-                                st.session_state.update({"lead_dados": {"data_cadastro": data_cad, "nome": nome, "cpf_cnpj": str(row.get('CPF_CNPJ', '')).replace('nan', ''), "endereco": str(row.get('Endereco', '')).replace('nan', ''), "numero": str(row.get('Numero', '')).replace('nan', ''), "cidade": str(row.get('Cidade', '')).replace('nan', ''), "estado": str(row.get("Estado", "")).replace('nan', ''), "telefone": telefone, "email_cliente": str(row.get('Email_Cliente', '')).replace('nan', ''), "contato": str(row.get('Contato', '')).replace('nan', ''), "gps": str(row.get("Coordenadas_GPS", "")).replace('nan', '')}, "lead_salvo": True, "gatilho_limpar_carrinho": True, "etapa_atual": "simulador", "editando_lead_idx": linha_real_planilha, "nome_proposta_atual": "", "temp_proposta_atual": "", "status_proposta_atual": ""}); st.rerun()
+                                st.session_state.update({"lead_dados": {"data_cadastro": data_cad, "nome": nome, "cpf_cnpj": str(row.get('CPF_CNPJ', '')).replace('nan', ''), "endereco": str(row.get('Endereco', '')).replace('nan', ''), "numero": str(row.get('Numero', '')).replace('nan', ''), "cidade": str(row.get('Cidade', '')).replace('nan', ''), "estado": str(row.get("Estado", "")).replace('nan', ''), "telefone": telefone, "email_cliente": str(row.get('Email_Cliente', '')).replace('nan', ''), "contato": str(row.get('Contato', '')).replace('nan', ''), "gps": str(row.get("Coordenadas_GPS", "")).replace('nan', '')}, "lead_salvo": True, "gatilho_limpar_carrinho": True, "etapa_atual": "simulador", "editando_lead_idx": linha_real_planilha, "nome_proposta_atual": "", "temp_proposta_atual": "Selecione...", "status_proposta_atual": "Selecione..."}); st.rerun()
                         with btn2:
                             if st.button("✏️", help="Editar", key=f"btn_edit_lead_{idx}", use_container_width=True): 
                                 st.session_state.update({"lead_dados": {"data_cadastro": data_cad, "nome": nome, "cpf_cnpj": str(row.get('CPF_CNPJ', '')).replace('nan', ''), "endereco": str(row.get('Endereco', '')).replace('nan', ''), "numero": str(row.get('Numero', '')).replace('nan', ''), "cidade": str(row.get('Cidade', '')).replace('nan', ''), "estado": str(row.get("Estado", "")).replace('nan', ''), "telefone": telefone, "email_cliente": str(row.get('Email_Cliente', '')).replace('nan', ''), "contato": str(row.get('Contato', '')).replace('nan', ''), "gps": str(row.get("Coordenadas_GPS", "")).replace('nan', '')}, "lead_salvo": True, "etapa_atual": "lead", "editando_lead_idx": linha_real_planilha}); st.rerun()
@@ -671,7 +680,7 @@ def tela_principal():
                         c_b1, c_b2 = st.columns([7, 3])
                         with c_b1:
                             if st.button("➕ Criar Proposta", key=f"btn_lead_{idx}", type="primary", use_container_width=True): 
-                                st.session_state.update({"lead_dados": {"data_cadastro": data_cad, "nome": nome, "cpf_cnpj": str(row.get('CPF_CNPJ', '')).replace('nan', ''), "endereco": str(row.get('Endereco', '')).replace('nan', ''), "numero": str(row.get('Numero', '')).replace('nan', ''), "cidade": str(row.get('Cidade', '')).replace('nan', ''), "estado": str(row.get("Estado", "")).replace('nan', ''), "telefone": telefone, "email_cliente": str(row.get('Email_Cliente', '')).replace('nan', ''), "contato": str(row.get('Contato', '')).replace('nan', ''), "gps": str(row.get("Coordenadas_GPS", "")).replace('nan', '')}, "lead_salvo": True, "gatilho_limpar_carrinho": True, "etapa_atual": "simulador", "editando_lead_idx": linha_real_planilha, "nome_proposta_atual": "", "temp_proposta_atual": "", "status_proposta_atual": ""}); st.rerun()
+                                st.session_state.update({"lead_dados": {"data_cadastro": data_cad, "nome": nome, "cpf_cnpj": str(row.get('CPF_CNPJ', '')).replace('nan', ''), "endereco": str(row.get('Endereco', '')).replace('nan', ''), "numero": str(row.get('Numero', '')).replace('nan', ''), "cidade": str(row.get('Cidade', '')).replace('nan', ''), "estado": str(row.get("Estado", "")).replace('nan', ''), "telefone": telefone, "email_cliente": str(row.get('Email_Cliente', '')).replace('nan', ''), "contato": str(row.get('Contato', '')).replace('nan', ''), "gps": str(row.get("Coordenadas_GPS", "")).replace('nan', '')}, "lead_salvo": True, "gatilho_limpar_carrinho": True, "etapa_atual": "simulador", "editando_lead_idx": linha_real_planilha, "nome_proposta_atual": "", "temp_proposta_atual": "Selecione...", "status_proposta_atual": "Selecione..."}); st.rerun()
                         with c_b2:
                             if st.button("✏️ Editar", key=f"btn_edit_lead_{idx}", use_container_width=True): 
                                 st.session_state.update({"lead_dados": {"data_cadastro": data_cad, "nome": nome, "cpf_cnpj": str(row.get('CPF_CNPJ', '')).replace('nan', ''), "endereco": str(row.get('Endereco', '')).replace('nan', ''), "numero": str(row.get('Numero', '')).replace('nan', ''), "cidade": str(row.get('Cidade', '')).replace('nan', ''), "estado": str(row.get("Estado", "")).replace('nan', ''), "telefone": telefone, "email_cliente": str(row.get('Email_Cliente', '')).replace('nan', ''), "contato": str(row.get('Contato', '')).replace('nan', ''), "gps": str(row.get("Coordenadas_GPS", "")).replace('nan', '')}, "lead_salvo": True, "etapa_atual": "lead", "editando_lead_idx": linha_real_planilha}); st.rerun()
@@ -726,7 +735,7 @@ def tela_principal():
                         if atualizar_lead(idx_editando_lead, st.session_state["lead_dados"]): st.toast("Cliente atualizado!"); st.cache_data.clear(); st.session_state["etapa_atual"] = "meus_leads"; st.rerun()
                     else:
                         novo_idx = salvar_lead(st.session_state["lead_dados"], st.session_state["nome_usuario"], st.session_state["email_usuario"])
-                        if novo_idx: st.session_state.update({"lead_salvo": True, "etapa_atual": "simulador", "editando_lead_idx": novo_idx, "nome_proposta_atual": "", "temp_proposta_atual": "", "status_proposta_atual": ""}); st.toast("Cliente salvo!"); st.cache_data.clear(); st.rerun()
+                        if novo_idx: st.session_state.update({"lead_salvo": True, "etapa_atual": "simulador", "editando_lead_idx": novo_idx, "nome_proposta_atual": "", "temp_proposta_atual": "Selecione...", "status_proposta_atual": "Selecione..."}); st.toast("Cliente salvo!"); st.cache_data.clear(); st.rerun()
 
     elif st.session_state["etapa_atual"] == "simulador":
         st.title("🛒 2. Simulador de Vendas")
@@ -742,18 +751,18 @@ def tela_principal():
             if not nome_proposta.strip():
                 st.markdown('<p style="color:#d90429; font-size:0.85rem; margin-top:-10px; font-weight:600;">⚠️ Preenchimento obrigatório</p>', unsafe_allow_html=True)
         with c_temp:
-            temp_opcoes = ["Quente 🔥", "Morno 🌤️", "Frio ❄️"]
-            temp_salva = st.session_state.get("temp_proposta_atual", "")
-            idx_temp = temp_opcoes.index(temp_salva) if temp_salva in temp_opcoes else None
-            temperatura_escolhida = st.selectbox("🌡️ Temperatura Atual:", temp_opcoes, index=idx_temp, placeholder="Selecione...")
-            if not temperatura_escolhida:
+            temp_opcoes = ["Selecione...", "Quente 🔥", "Morno 🌤️", "Frio ❄️"]
+            temp_salva = st.session_state.get("temp_proposta_atual", "Selecione...")
+            if temp_salva not in temp_opcoes: temp_salva = "Selecione..."
+            temperatura_escolhida = st.selectbox("🌡️ Temperatura Atual:", temp_opcoes, index=temp_opcoes.index(temp_salva))
+            if temperatura_escolhida == "Selecione...":
                 st.markdown('<p style="color:#d90429; font-size:0.85rem; margin-top:-10px; font-weight:600;">⚠️ Preenchimento obrigatório</p>', unsafe_allow_html=True)
         with c_status:
-            status_opcoes = ["Em Negociação", "Aprovada"]
-            status_salvo = st.session_state.get("status_proposta_atual", "")
-            idx_status = status_opcoes.index(status_salvo) if status_salvo in status_opcoes else None
-            status_escolhido = st.selectbox("📊 Status da Proposta:", status_opcoes, index=idx_status, placeholder="Selecione...")
-            if not status_escolhido:
+            status_opcoes = ["Selecione...", "Em Negociação", "Aprovada"]
+            status_salvo = st.session_state.get("status_proposta_atual", "Selecione...")
+            if status_salvo not in status_opcoes: status_salvo = "Selecione..."
+            status_escolhido = st.selectbox("📊 Status da Proposta:", status_opcoes, index=status_opcoes.index(status_salvo))
+            if status_escolhido == "Selecione...":
                 st.markdown('<p style="color:#d90429; font-size:0.85rem; margin-top:-10px; font-weight:600;">⚠️ Preenchimento obrigatório</p>', unsafe_allow_html=True)
         
         st.divider()
@@ -778,13 +787,12 @@ def tela_principal():
                     with c_d2: st.number_input(f"Alarme (%) [Máx: {lim_a:.0f}%]", min_value=0.0, max_value=float(lim_a), step=0.5, key="desc_alarme")
                     with c_d3: st.number_input(f"Imagem (%) [Máx: {lim_i:.0f}%]", min_value=0.0, max_value=float(lim_i), step=0.5, key="desc_imagem")
                 
-                unidade_selecionada = st.selectbox(
-                    "🏢 Unidade de Mão de Obra", 
-                    unidades_disponiveis, 
-                    index=None, 
-                    placeholder="⚠️ Selecione a unidade de MO", 
-                    key="unidade_mo_selecionada"
-                )
+                opcoes_unidade = ["Selecione..."] + unidades_disponiveis
+                unidade_selecionada_op = st.selectbox("🏢 Unidade de Mão de Obra", opcoes_unidade, index=0)
+                unidade_selecionada = None if unidade_selecionada_op == "Selecione..." else unidade_selecionada_op
+                
+                if not unidade_selecionada:
+                    st.markdown('<p style="color:#d90429; font-size:0.85rem; margin-top:-10px; font-weight:600;">⚠️ Selecione a unidade de MO.</p>', unsafe_allow_html=True)
 
             with col_produtos:
                 st.write("### ➕ Catálogo")
@@ -859,10 +867,10 @@ def tela_principal():
                     v_u = item['preco_venda'] if item['preco_venda'] > 0 else item['preco_mrr']
                     
                     if unidade_selecionada and ("obra" in cat_limpa or "instala" in cat_limpa) and not df_valor_ponto.empty:
-                        match_mo_card = df_valor_ponto[(df_valor_ponto['Unidade'].astype(str).str.strip() == unidade_selecionada) & (df_valor_ponto['Nome_Item'].astype(str).str.strip() == nome_item_limpo)]
-                        if not match_mo_card.empty:
-                            v_u = converter_para_numero(match_mo_card.iloc[0]['Valor_MO'])
-                            if str(match_mo_card.iloc[0].get('Codigo', '')).strip() and str(match_mo_card.iloc[0].get('Codigo', '')).strip() != 'nan': item['codigo'] = str(match_mo_card.iloc[0].get('Codigo', '')).strip()
+                        match_mo = df_valor_ponto[(df_valor_ponto['Unidade'].astype(str).str.strip() == unidade_selecionada) & (df_valor_ponto['Nome_Item'].astype(str).str.strip() == nome_item_limpo)]
+                        if not match_mo.empty:
+                            v_u = converter_para_numero(match_mo.iloc[0]['Valor_MO'])
+                            if str(match_mo.iloc[0].get('Codigo', '')).strip() and str(match_mo.iloc[0].get('Codigo', '')).strip() != 'nan': item['codigo'] = str(match_mo.iloc[0].get('Codigo', '')).strip()
                             
                     if cod_item in ['254000000042', '254000000377', '25400000042', '25400000377'] and not df_valor_sensor.empty:
                         match = df_valor_sensor[(df_valor_sensor['Codigo_Servico'].astype(str).str.strip().str.lstrip('0') == cod_item) & (pd.to_numeric(df_valor_sensor['Sensor_Abertura'], errors='coerce') == qtd_abertura) & (pd.to_numeric(df_valor_sensor['Sensor_IVP'], errors='coerce') == qtd_ivp)]
@@ -935,7 +943,7 @@ def tela_principal():
                     for a in avisos_projeto: st.write(f"- {a}")
                     if not st.checkbox("Estou ciente das inconsistências técnicas acima e confirmo o salvamento da proposta assim mesmo.", key="chk_override_regras"): pode_gravar = False
                 
-                if not unidade_selecionada or not nome_proposta.strip() or not temperatura_escolhida or not status_escolhido:
+                if not unidade_selecionada or not nome_proposta.strip() or temperatura_escolhida == "Selecione..." or status_escolhido == "Selecione...":
                     pode_gravar = False
                 
                 st.write("")
