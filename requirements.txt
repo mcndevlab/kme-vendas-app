@@ -5,3 +5,4 @@ google-auth
 streamlit-geolocation
 geopy
 pydeck
+python-docx
