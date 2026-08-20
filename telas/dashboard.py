@@ -244,8 +244,8 @@ def tela_principal():
         st.markdown("### **Khronos Sales**")
         st.write(f"👤 **{st.session_state['nome_usuario']}**")
         st.divider()
-        if st.button("➕ Novo Lead", use_container_width=True): st.session_state.update({"gatilho_limpar_tudo": True, "etapa_atual": "lead"}); st.rerun()
-        if st.button("📋 Meus Leads", use_container_width=True): st.session_state.update({"etapa_atual": "meus_leads", "proposta_idx_editando": None}); st.rerun()
+        if st.button("➕ Novo Cliente", use_container_width=True): st.session_state.update({"gatilho_limpar_tudo": True, "etapa_atual": "lead"}); st.rerun()
+        if st.button("📋 Meus Clientes", use_container_width=True): st.session_state.update({"etapa_atual": "meus_leads", "proposta_idx_editando": None}); st.rerun()
         if st.button("💼 Minhas Propostas", use_container_width=True): st.session_state.update({"etapa_atual": "minhas_propostas", "proposta_idx_editando": None}); st.rerun()
             
         perfil_acesso = str(st.session_state.get('perfil_usuario', '')).strip()
@@ -297,9 +297,9 @@ def tela_principal():
                 camada_deck = pdk.Layer("ScatterplotLayer", data=df_agrupado, get_position='[lon, lat]', get_color='cor_rgba', get_radius='raio_tamanho', pickable=True)
                 visao_inicial = pdk.ViewState(latitude=df_agrupado['lat'].mean(), longitude=df_agrupado['lon'].mean(), zoom=10, pitch=0)
                 st.pydeck_chart(pdk.Deck(map_style=None, initial_view_state=visao_inicial, layers=[camada_deck], tooltip={"html": "<b>{Qtd} Lead(s) neste local:</b><br/>{Nomes}", "style": {"backgroundColor": "#1e293b", "color": "white"}}))
-                st.caption(f"📍 Mostrando a localização exata de **{len(df_mapa)} lead(s)**.")
+                st.caption(f"📍 Mostrando a localização exata de **{len(df_mapa)} cliente(s)**.")
             else: st.info("Nenhuma localização válida com os filtros selecionados.")
-        else: st.info("Nenhum lead com localização registrada.")
+        else: st.info("Nenhum cliente com localização registrada.")
 
     elif st.session_state["etapa_atual"] == "funil_equipe":
         st.header("📊 Funil da Equipe")
@@ -310,10 +310,10 @@ def tela_principal():
         df_eq_leads, df_eq_prop, mapa_vendedores = aplicar_filtros_gerenciais(df_users, carregar_todos_leads(), carregar_todas_propostas(), perfil, minha_unidade)
         
         st.write("---")
-        aba_leads, aba_prop = st.tabs(["📋 Leads da Equipe", "💼 Propostas da Equipe"])
+        aba_leads, aba_prop = st.tabs(["📋 Clientes da Equipe", "💼 Propostas da Equipe"])
         
         with aba_leads:
-            if df_eq_leads.empty: st.info("Nenhum lead encontrado para esta seleção.")
+            if df_eq_leads.empty: st.info("Nenhum cliente encontrado para esta seleção.")
             else:
                 df_eq_leads = df_eq_leads.iloc[::-1]
                 h1, h2, h3, h4, h5 = st.columns([2, 4, 2, 2, 2])
@@ -574,15 +574,15 @@ def tela_principal():
                             if st.button("🔄 Renovar / Editar Proposta", key=f"ren_tab_{linha_real_planilha}", type="primary", use_container_width=True): st.session_state["renovar_proposta_idx"] = linha_real_planilha; st.session_state["renovar_proposta_dados"] = row.to_dict(); st.rerun()
 
     elif st.session_state["etapa_atual"] == "meus_leads":
-        st.header("📋 Meus Leads")
+        st.header("📋 Meus Clientes")
         df_leads = carregar_meus_leads(st.session_state["email_usuario"])
         
         c_busc, c_modo = st.columns([7, 3])
         with c_modo: modo_lead = st.radio("Modo de Exibição:", ["📱 Cartões (Celular)", "🖥️ Tabela Analítica"], key="modo_visao_leads", horizontal=True)
 
-        if df_leads.empty: st.info("Nenhum lead encontrado no seu funil.")
+        if df_leads.empty: st.info("Nenhum cliente encontrado no seu funil.")
         else:
-            with c_busc: busca = st.text_input("🔍 Buscar Lead por Nome ou Telefone:")
+            with c_busc: busca = st.text_input("🔍 Buscar Cliente por Nome ou Telefone:")
             if busca: df_leads = df_leads[df_leads.astype(str).apply(lambda x: x.str.contains(busca, case=False)).any(axis=1)]
             df_leads = df_leads.iloc[::-1]
 
@@ -660,7 +660,7 @@ def tela_principal():
 
     elif st.session_state["etapa_atual"] == "lead":
         idx_editando_lead = st.session_state.get("editando_lead_idx")
-        st.title("👤 Atualizar Dados do Lead" if idx_editando_lead else "👤 1. Cadastro de Novo Lead")
+        st.title("👤 Atualizar Dados do Cliente" if idx_editando_lead else "👤 1. Cadastro de Novo Cliente")
         
         st.write("📍 **Preencher Localização**")
         st.caption("Clique no botão abaixo para registrar sua coordenada atual.")
@@ -696,7 +696,7 @@ def tela_principal():
             contato, email_cliente = c8.text_input("Nome do Contato", value=ld.get("contato", "")), st.text_input("✉️ E-mail do Cliente", value=ld.get("email_cliente", ""))
             gps_final = gps_audit if gps_audit else ld.get("gps", "")
             
-            if st.form_submit_button("Atualizar Dados do Lead ➡️" if idx_editando_lead else "Salvar Lead e Iniciar Proposta ➡️", type="primary", use_container_width=True):
+            if st.form_submit_button("Atualizar Dados do Cliente ➡️" if idx_editando_lead else "Salvar Cliente e Iniciar Proposta ➡️", type="primary", use_container_width=True):
                 tel_numeros, email_valido = re.sub(r'\D', '', telefone), False if email_cliente and not re.match(r'^[\w\.-]+@[\w\.-]+\.\w+$', email_cliente) else True
                 if not nome or not endereco or not numero or not telefone: st.error("⚠️ Atenção: Preencha todos os campos marcados com (*).")
                 elif len(tel_numeros) < 10 or len(tel_numeros) > 11: st.error("⚠️ Atenção: O Telefone deve conter o DDD + Número válido (10 ou 11 dígitos).")
@@ -705,10 +705,10 @@ def tela_principal():
                 else:
                     st.session_state["lead_dados"].update({"nome": padronizar_nome(nome), "cpf_cnpj": cpf_cnpj, "endereco": padronizar_nome(endereco), "numero": numero, "cidade": padronizar_nome(cidade), "estado": estado, "telefone": padronizar_telefone(telefone), "contato": padronizar_nome(contato), "email_cliente": email_cliente, "gps": gps_audit if gps_audit else ld.get("gps", "")})
                     if idx_editando_lead:
-                        if atualizar_lead(idx_editando_lead, st.session_state["lead_dados"]): st.toast("Lead atualizado!"); st.cache_data.clear(); st.session_state["etapa_atual"] = "meus_leads"; st.rerun()
+                        if atualizar_lead(idx_editando_lead, st.session_state["lead_dados"]): st.toast("Cliente atualizado!"); st.cache_data.clear(); st.session_state["etapa_atual"] = "meus_leads"; st.rerun()
                     else:
                         novo_idx = salvar_lead(st.session_state["lead_dados"], st.session_state["nome_usuario"], st.session_state["email_usuario"])
-                        if novo_idx: st.session_state.update({"lead_salvo": True, "etapa_atual": "simulador", "editando_lead_idx": novo_idx}); st.toast("Lead salvo!"); st.cache_data.clear(); st.rerun()
+                        if novo_idx: st.session_state.update({"lead_salvo": True, "etapa_atual": "simulador", "editando_lead_idx": novo_idx}); st.toast("Cliente salvo!"); st.cache_data.clear(); st.rerun()
 
     elif st.session_state["etapa_atual"] == "simulador":
         st.title("🛒 2. Simulador de Vendas")
@@ -716,7 +716,7 @@ def tela_principal():
         col_lead_info, col_lead_btn = st.columns([8, 2])
         with col_lead_info: st.info(f"👤 **Cliente Ativo:** {st.session_state['lead_dados'].get('nome', '')} | 📞 {st.session_state['lead_dados'].get('telefone', '')}")
         with col_lead_btn:
-            if st.button("✏️ Editar Lead", use_container_width=True): st.session_state["etapa_atual"] = "lead"; st.rerun()
+            if st.button("✏️ Editar Cliente", use_container_width=True): st.session_state["etapa_atual"] = "lead"; st.rerun()
         
         c_nome, c_temp, c_status = st.columns([4, 3, 3])
         with c_nome:
