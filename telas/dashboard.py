@@ -523,7 +523,7 @@ def tela_principal():
                             faltam_t = limite_temp - (hoje - d_ref_t).days
                             txt_t = f"{faltam_t}d" if faltam_t >= 0 else "Venc"
                         except: txt_t = "-"
-                        tempo_faltante = f"P:{txt_p} | T:{txt_t}"
+                        tempo_faltante = f"Prop: {txt_p} | Temp: {txt_t}"
                     
                     cor_status = "🏆" if status == "Aprovada" else ("🟢" if status == "Em Negociação" else ("🔴" if status == "Perdida" else "⚫"))
                     
@@ -853,10 +853,10 @@ def tela_principal():
                     v_u = item['preco_venda'] if item['preco_venda'] > 0 else item['preco_mrr']
                     
                     if unidade_selecionada and ("obra" in cat_limpa or "instala" in cat_limpa) and not df_valor_ponto.empty:
-                        match_mo = df_valor_ponto[(df_valor_ponto['Unidade'].astype(str).str.strip() == unidade_selecionada) & (df_valor_ponto['Nome_Item'].astype(str).str.strip() == nome_item_limpo)]
-                        if not match_mo.empty:
-                            v_u = converter_para_numero(match_mo.iloc[0]['Valor_MO'])
-                            if str(match_mo.iloc[0].get('Codigo', '')).strip() and str(match_mo.iloc[0].get('Codigo', '')).strip() != 'nan': item['codigo'] = str(match_mo.iloc[0].get('Codigo', '')).strip()
+                        match_mo_card = df_valor_ponto[(df_valor_ponto['Unidade'].astype(str).str.strip() == unidade_selecionada) & (df_valor_ponto['Nome_Item'].astype(str).str.strip() == nome_item_limpo)]
+                        if not match_mo_card.empty:
+                            v_u = converter_para_numero(match_mo_card.iloc[0]['Valor_MO'])
+                            if str(match_mo_card.iloc[0].get('Codigo', '')).strip() and str(match_mo_card.iloc[0].get('Codigo', '')).strip() != 'nan': item['codigo'] = str(match_mo_card.iloc[0].get('Codigo', '')).strip()
                             
                     if cod_item in ['254000000042', '254000000377', '25400000042', '25400000377'] and not df_valor_sensor.empty:
                         match = df_valor_sensor[(df_valor_sensor['Codigo_Servico'].astype(str).str.strip().str.lstrip('0') == cod_item) & (pd.to_numeric(df_valor_sensor['Sensor_Abertura'], errors='coerce') == qtd_abertura) & (pd.to_numeric(df_valor_sensor['Sensor_IVP'], errors='coerce') == qtd_ivp)]
@@ -932,7 +932,6 @@ def tela_principal():
                 if not unidade_selecionada or not nome_proposta.strip():
                     pode_gravar = False
                 
-                # --- BOTÃO SALVAR ORÇAMENTO MOVIDO PARA CÁ ---
                 st.write("")
                 if st.button("💾 Salvar Orçamento", type="primary", disabled=not pode_gravar, use_container_width=True, help="Preencha o Nome da Proposta e a Unidade de Mão de Obra para habilitar"):
                     idx_editando = st.session_state.get("proposta_idx_editando")
@@ -951,7 +950,6 @@ def tela_principal():
                         st.session_state["msg_sucesso"] = f"🎉 Orçamento '{nome_proposta}' salvo com sucesso!"
                         st.session_state["gatilho_limpar_tudo"] = True; st.cache_data.clear(); st.rerun()
 
-                # --- BLOCO DE AÇÕES DIRETAS (HTML, E-MAIL, WHATSAPP E CONTRATO) ---
                 condicao_txt = f"{parcela_escolhida}x de {txt_parcela} (no {forma_limpa})"
                 setup_txt = f"R$ {total_setup:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
                 html_prop = gerar_html_proposta(st.session_state["lead_dados"].get("nome", ""), nome_proposta, st.session_state["nome_usuario"], st.session_state["carrinho"], mrr_formatado, setup_txt, condicao_txt)
