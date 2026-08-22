@@ -744,7 +744,6 @@ def tela_principal():
 
         ld = st.session_state["lead_dados"]
         
-        # Define se já é um CPF ou CNPJ baseado no que tem salvo
         doc_atual = re.sub(r'\D', '', str(ld.get("cpf_cnpj", "")))
         idx_tipo = 1 if len(doc_atual) > 11 else 0
         tipo_pessoa = st.radio("Tipo de Cliente:", ["Pessoa Física (CPF)", "Pessoa Jurídica (CNPJ)"], index=idx_tipo, horizontal=True)
@@ -753,12 +752,12 @@ def tela_principal():
             if "CPF" in tipo_pessoa:
                 c1, c2, c3 = st.columns([4, 3, 3])
                 nome = c1.text_input("Nome Completo *", value=ld.get("nome", ""))
-                cpf_cnpj = c2.text_input("CPF *", value=ld.get("cpf_cnpj", ""), max_chars=14, placeholder="000.000.000-00")
-                data_nasc = c3.text_input("Data de Nascimento *", value=ld.get("data_nascimento", ""), max_chars=10, placeholder="DD/MM/AAAA")
+                cpf_cnpj = c2.text_input("CPF *", value=ld.get("cpf_cnpj", ""), max_chars=14, placeholder="Somente números")
+                data_nasc = c3.text_input("Data de Nascimento *", value=ld.get("data_nascimento", ""), max_chars=10, placeholder="Ex: 02121978")
             else:
                 c1, c2 = st.columns([6, 4])
                 nome = c1.text_input("Razão Social *", value=ld.get("nome", ""))
-                cpf_cnpj = c2.text_input("CNPJ *", value=ld.get("cpf_cnpj", ""), max_chars=18, placeholder="00.000.000/0000-00")
+                cpf_cnpj = c2.text_input("CNPJ *", value=ld.get("cpf_cnpj", ""), max_chars=18, placeholder="Somente números")
                 data_nasc = ""
 
             c3_b, c4, c5 = st.columns([4, 2, 3])
@@ -785,13 +784,19 @@ def tela_principal():
                 msg_doc = "CPF inválido." if is_cpf else "CNPJ inválido."
                 
                 nasc_valido = True
-                if is_cpf and data_nasc:
-                    if not re.match(r'^(0[1-9]|[12][0-9]|3[01])/(0[1-9]|1[012])/\d{4}$', data_nasc):
+                data_nasc_formatada = data_nasc.strip()
+                if is_cpf and data_nasc_formatada:
+                    nasc_limpo = re.sub(r'\D', '', data_nasc_formatada)
+                    # Formata a data se o usuário digitou apenas 8 números
+                    if len(nasc_limpo) == 8:
+                        data_nasc_formatada = f"{nasc_limpo[:2]}/{nasc_limpo[2:4]}/{nasc_limpo[4:]}"
+                    
+                    if not re.match(r'^(0[1-9]|[12][0-9]|3[01])/(0[1-9]|1[012])/\d{4}$', data_nasc_formatada):
                         nasc_valido = False
                 
                 if not nome or not endereco or not numero or not telefone or not cpf_cnpj: 
                     st.error("⚠️ Atenção: Preencha todos os campos obrigatórios marcados com (*).")
-                elif is_cpf and not data_nasc:
+                elif is_cpf and not data_nasc_formatada:
                     st.error("⚠️ Atenção: Preencha a Data de Nascimento para pessoa física.")
                 elif len(tel_numeros) < 10 or len(tel_numeros) > 11: 
                     st.error("⚠️ Atenção: O Telefone deve conter o DDD + Número válido (10 ou 11 dígitos).")
@@ -800,7 +805,7 @@ def tela_principal():
                 elif not doc_valido:
                     st.error(f"⚠️ Atenção: {msg_doc}")
                 elif is_cpf and not nasc_valido:
-                    st.error("⚠️ Atenção: A Data de Nascimento deve estar no formato DD/MM/AAAA.")
+                    st.error("⚠️ Atenção: A Data de Nascimento deve ter 8 números (ex: 02121978) ou estar no formato DD/MM/AAAA.")
                 elif not (gps_audit if gps_audit else ld.get("gps", "")) and not idx_editando_lead: 
                     st.error("⚠️ Atenção: Valide sua localização clicando no ícone de GPS.")
                 else:
@@ -808,7 +813,7 @@ def tela_principal():
                     st.session_state["lead_dados"].update({
                         "nome": padronizar_nome(nome), 
                         "cpf_cnpj": doc_formatado, 
-                        "data_nascimento": data_nasc if is_cpf else "",
+                        "data_nascimento": data_nasc_formatada if is_cpf else "",
                         "endereco": padronizar_nome(endereco), 
                         "numero": numero, 
                         "cidade": padronizar_nome(cidade), 
