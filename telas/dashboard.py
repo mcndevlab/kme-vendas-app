@@ -781,13 +781,16 @@ def tela_principal():
                 doc_limpo = re.sub(r'\D', '', cpf_cnpj)
                 is_cpf = "CPF" in tipo_pessoa
                 doc_valido = validar_cpf(doc_limpo) if is_cpf else validar_cnpj(doc_limpo)
-                msg_doc = "CPF inválido." if is_cpf else "CNPJ inválido."
+                
+                if is_cpf:
+                    msg_doc = "CPF inválido. Certifique-se de digitar os 11 números."
+                else:
+                    msg_doc = "CNPJ inválido. Certifique-se de digitar os 14 números."
                 
                 nasc_valido = True
                 data_nasc_formatada = data_nasc.strip()
                 if is_cpf and data_nasc_formatada:
                     nasc_limpo = re.sub(r'\D', '', data_nasc_formatada)
-                    # Formata a data se o usuário digitou apenas 8 números
                     if len(nasc_limpo) == 8:
                         data_nasc_formatada = f"{nasc_limpo[:2]}/{nasc_limpo[2:4]}/{nasc_limpo[4:]}"
                     
