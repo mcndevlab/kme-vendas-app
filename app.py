@@ -2,10 +2,10 @@ import streamlit as st
 from telas.login import tela_login, tela_trocar_senha
 from telas.dashboard import tela_principal
 
-# 1. Configuração da página (Menu nascendo aberto)
+# 1. Configuração da página (Ícone do navegador e Menu nascendo aberto)
 st.set_page_config(
     page_title="Khronos Sales", 
-    page_icon="🛡️", 
+    page_icon="💲",   # <--- O ícone foi alterado bem aqui! (Pode trocar por 💰 ou 💵 se preferir)
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -47,6 +47,7 @@ if "autenticado" not in st.session_state:
         "nome_proposta_atual": "", 
         "temp_proposta_atual": "Selecione...", 
         "status_proposta_atual": "Selecione...", 
+        "status_credito_deps": None,
         "ultimo_gps_capturado": "", 
         "item_aberto": None, 
         "unidade_mo_selecionada": None, 
