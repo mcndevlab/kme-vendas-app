@@ -2,12 +2,12 @@ import streamlit as st
 from telas.login import tela_login, tela_trocar_senha
 from telas.dashboard import tela_principal
 
-# 1. Configuração da página (Ícone do navegador agora usa a Logo Vermelha!)
+# 1. Configuração da página (Ícone com a Logo e Menu Lateral forçado para iniciar aberto)
 st.set_page_config(
     page_title="Khronos Sales", 
-    page_icon="logo.jpg",   # <--- A mágica acontece aqui!
+    page_icon="logo.jpg",   
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded" # <-- Este é o comando que força o menu a abrir
 )
 
 # 2. Estilização CSS Padrão
@@ -36,7 +36,7 @@ if "autenticado" not in st.session_state:
         "desc_prod": 0.0, 
         "desc_alarme": 0.0, 
         "desc_imagem": 0.0, 
-        "etapa_atual": "lead", 
+        "etapa_atual": "lead",  # <-- Voltou para abrir direto no Cadastro do Cliente
         "lead_dados": {}, 
         "lead_salvo": False, 
         "msg_sucesso": "", 
