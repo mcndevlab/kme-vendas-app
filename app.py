@@ -2,10 +2,10 @@ import streamlit as st
 from telas.login import tela_login, tela_trocar_senha
 from telas.dashboard import tela_principal
 
-# 1. Configuração da página (Ícone do navegador e Menu nascendo aberto)
+# 1. Configuração da página (Ícone do navegador agora usa a Logo Vermelha!)
 st.set_page_config(
     page_title="Khronos Sales", 
-    page_icon="💲",   # <--- O ícone foi alterado bem aqui! (Pode trocar por 💰 ou 💵 se preferir)
+    page_icon="logo.jpg",   # <--- A mágica acontece aqui!
     layout="wide",
     initial_sidebar_state="expanded"
 )
