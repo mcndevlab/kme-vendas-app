@@ -841,28 +841,6 @@ def tela_principal():
         with col_lead_btn:
             if st.button("✏️ Editar Cliente", use_container_width=True): st.session_state["etapa_atual"] = "lead"; st.rerun()
         
-        c_nome, c_temp, c_status = st.columns([4, 3, 3])
-        with c_nome:
-            nome_proposta = st.text_input("📝 Nome/Referência da Proposta (Ex: Matriz, Filial)", value=st.session_state.get("nome_proposta_atual", ""))
-            if not nome_proposta.strip():
-                st.markdown('<p style="color:#d90429; font-size:0.85rem; margin-top:-10px; font-weight:600;">⚠️ Preenchimento obrigatório</p>', unsafe_allow_html=True)
-        with c_temp:
-            temp_opcoes = ["Selecione...", "Quente 🔥", "Morno 🌤️", "Frio ❄️"]
-            temp_salva = st.session_state.get("temp_proposta_atual", "Selecione...")
-            if temp_salva not in temp_opcoes: temp_salva = "Selecione..."
-            temperatura_escolhida = st.selectbox("🌡️ Temperatura Atual:", temp_opcoes, index=temp_opcoes.index(temp_salva))
-            if temperatura_escolhida == "Selecione...":
-                st.markdown('<p style="color:#d90429; font-size:0.85rem; margin-top:-10px; font-weight:600;">⚠️ Preenchimento obrigatório</p>', unsafe_allow_html=True)
-        with c_status:
-            status_opcoes = ["Selecione...", "Em Negociação", "Aprovada"]
-            status_salvo = st.session_state.get("status_proposta_atual", "Selecione...")
-            if status_salvo not in status_opcoes: status_salvo = "Selecione..."
-            status_escolhido = st.selectbox("📊 Status da Proposta:", status_opcoes, index=status_opcoes.index(status_salvo))
-            if status_escolhido == "Selecione...":
-                st.markdown('<p style="color:#d90429; font-size:0.85rem; margin-top:-10px; font-weight:600;">⚠️ Preenchimento obrigatório</p>', unsafe_allow_html=True)
-        
-        st.divider()
-
         try:
             df_produtos, df_valor_sensor, df_valor_ponto, df_regras, cfg = carregar_produtos(), carregar_valores_sensores(), carregar_valores_ponto_mo(), carregar_regras_validacao(), carregar_configuracoes()
             taxa_bruta = cfg.get("Taxa_Juros_Mensal", 0.022)
@@ -870,6 +848,40 @@ def tela_principal():
             max_sj, max_bol, max_cc = int(cfg.get("Max_Parcelas_Sem_Juros", 3)), int(cfg.get("Max_Parcelas_Boleto", 18)), int(cfg.get("Max_Parcelas_Cartao", 24))
             lim_p, lim_a, lim_i = cfg.get("Desc_Max_Produtos", 15.0), cfg.get("Desc_Max_Alarme", 15.0), cfg.get("Desc_Max_Imagem", 30.0)
             unidades_disponiveis = sorted(list(set(df_valor_ponto['Unidade'].dropna().astype(str).str.strip()))) if not df_valor_ponto.empty and 'Unidade' in df_valor_ponto.columns else ["Padrão"]
+
+            c_nome, c_temp, c_status, c_unid = st.columns([3, 2, 2, 3])
+            with c_nome:
+                nome_proposta = st.text_input("📝 Nome/Referência da Proposta (Ex: Matriz, Filial)", value=st.session_state.get("nome_proposta_atual", ""))
+                if not nome_proposta.strip():
+                    st.markdown('<p style="color:#d90429; font-size:0.85rem; margin-top:-10px; font-weight:600;">⚠️ Preenchimento obrigatório</p>', unsafe_allow_html=True)
+            with c_temp:
+                temp_opcoes = ["Selecione...", "Quente 🔥", "Morno 🌤️", "Frio ❄️"]
+                temp_salva = st.session_state.get("temp_proposta_atual", "Selecione...")
+                if temp_salva not in temp_opcoes: temp_salva = "Selecione..."
+                temperatura_escolhida = st.selectbox("🌡️ Temperatura Atual:", temp_opcoes, index=temp_opcoes.index(temp_salva))
+                if temperatura_escolhida == "Selecione...":
+                    st.markdown('<p style="color:#d90429; font-size:0.85rem; margin-top:-10px; font-weight:600;">⚠️ Preenchimento obrigatório</p>', unsafe_allow_html=True)
+            with c_status:
+                status_opcoes = ["Selecione...", "Em Negociação", "Aprovada"]
+                status_salvo = st.session_state.get("status_proposta_atual", "Selecione...")
+                if status_salvo not in status_opcoes: status_salvo = "Selecione..."
+                status_escolhido = st.selectbox("📊 Status da Proposta:", status_opcoes, index=status_opcoes.index(status_salvo))
+                if status_escolhido == "Selecione...":
+                    st.markdown('<p style="color:#d90429; font-size:0.85rem; margin-top:-10px; font-weight:600;">⚠️ Preenchimento obrigatório</p>', unsafe_allow_html=True)
+            with c_unid:
+                opcoes_unidade = ["Selecione..."] + unidades_disponiveis
+                idx_unid = 0
+                val_unid = st.session_state.get("unidade_mo_selecionada")
+                if val_unid in opcoes_unidade:
+                    idx_unid = opcoes_unidade.index(val_unid)
+                unidade_selecionada_op = st.selectbox("🏢 Unidade de Mão de Obra", opcoes_unidade, index=idx_unid)
+                st.session_state["unidade_mo_selecionada"] = unidade_selecionada_op
+                unidade_selecionada = None if unidade_selecionada_op == "Selecione..." else unidade_selecionada_op
+                
+                if not unidade_selecionada:
+                    st.markdown('<p style="color:#d90429; font-size:0.85rem; margin-top:-10px; font-weight:600;">⚠️ Selecione a unidade de MO.</p>', unsafe_allow_html=True)
+            
+            st.divider()
 
             col_produtos, col_resumo = st.columns([5, 5])
             with col_resumo:
@@ -883,13 +895,6 @@ def tela_principal():
                     with c_d2: st.number_input(f"Alarme (%) [Máx: {lim_a:.0f}%]", min_value=0.0, max_value=float(lim_a), step=0.5, key="desc_alarme")
                     with c_d3: st.number_input(f"Imagem (%) [Máx: {lim_i:.0f}%]", min_value=0.0, max_value=float(lim_i), step=0.5, key="desc_imagem")
                 
-                opcoes_unidade = ["Selecione..."] + unidades_disponiveis
-                unidade_selecionada_op = st.selectbox("🏢 Unidade de Mão de Obra", opcoes_unidade, index=0)
-                unidade_selecionada = None if unidade_selecionada_op == "Selecione..." else unidade_selecionada_op
-                
-                if not unidade_selecionada:
-                    st.markdown('<p style="color:#d90429; font-size:0.85rem; margin-top:-10px; font-weight:600;">⚠️ Selecione a unidade de MO.</p>', unsafe_allow_html=True)
-
             with col_produtos:
                 st.write("### ➕ Catálogo")
                 aba_servicos, aba_produtos, aba_mao_obra = st.tabs(["🔄 Serviços", "📦 Produtos", "🛠️ Mão de Obra"])
