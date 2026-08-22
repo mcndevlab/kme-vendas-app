@@ -4,6 +4,7 @@ import datetime
 import re
 import os
 import urllib.parse
+import requests
 import pydeck as pdk
 from streamlit_geolocation import streamlit_geolocation
 from geopy.geocoders import Nominatim
@@ -42,6 +43,7 @@ def carregar_proposta_para_simulador(idx_planilha, dados_prop, df_produtos, df_l
     st.session_state["temp_proposta_atual"] = str(dados_prop.get('Temperatura', 'Selecione...'))
     st.session_state["status_proposta_atual"] = str(dados_prop.get('Status_Proposta', 'Selecione...'))
     st.session_state["status_credito_deps"] = None
+    st.session_state["tempo_empresa_credito"] = None
     
     nome_cliente = str(dados_prop.get('Nome_Cliente', '')).strip()
     lead_row = df_leads[df_leads['Nome_Razao'].astype(str).str.strip() == nome_cliente]
@@ -273,12 +275,12 @@ def tela_principal():
             "lead_dados": {}, "lead_salvo": False, "renovar_proposta_idx": None, 
             "proposta_idx_editando": None, "editando_lead_idx": None, "nome_proposta_atual": "", 
             "temp_proposta_atual": "Selecione...", "status_proposta_atual": "Selecione...", 
-            "status_credito_deps": None,
+            "status_credito_deps": None, "tempo_empresa_credito": None,
             "ultimo_gps_capturado": "", "item_aberto": None, "unidade_mo_selecionada": None, 
             "gatilho_limpar_tudo": False
         })
     if st.session_state.get("gatilho_limpar_carrinho", False):
-        st.session_state.update({"carrinho": [], "desc_prod": 0.0, "desc_alarme": 0.0, "desc_imagem": 0.0, "item_aberto": None, "gatilho_limpar_carrinho": False, "status_credito_deps": None})
+        st.session_state.update({"carrinho": [], "desc_prod": 0.0, "desc_alarme": 0.0, "desc_imagem": 0.0, "item_aberto": None, "gatilho_limpar_carrinho": False, "status_credito_deps": None, "tempo_empresa_credito": None})
     if st.session_state["msg_sucesso"] != "": st.success(st.session_state["msg_sucesso"]); st.session_state["msg_sucesso"] = ""
 
     # --- TELAS INTERNAS ---
@@ -560,24 +562,14 @@ def tela_principal():
                         html_prop = gerar_html_proposta(cliente, nome_prop, vendedor, itens_para_html, mrr, setup, condicao_txt)
                         docx_bytes, erro_docx = gerar_documento_contrato(lead_para_contrato, mrr, setup, condicao_txt)
                         
-                        c_b1, c_b2 = st.columns(2)
+                        c_b1, c_b2, c_b3 = st.columns(3)
                         with c_b1:
-                            st.download_button("📄 PDF", data=html_prop, file_name=f"Proposta_{cliente}.html", mime="text/html", use_container_width=True, type="primary", key=f"dl_tab_{linha_real_planilha}")
+                            st.download_button("📄 Download Proposta", data=html_prop, file_name=f"Proposta_{cliente}.html", mime="text/html", use_container_width=True, type="primary", key=f"dl_tab_{linha_real_planilha}")
                         with c_b2:
-                            if docx_bytes: st.download_button("📝 DOCX", data=docx_bytes, file_name=f"Contrato_{cliente}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True, type="primary", key=f"dl_cx_{linha_real_planilha}")
-                        
-                        if status == "Em Negociação":
-                            c_a1, c_a2 = st.columns(2)
-                            with c_a1:
-                                if st.button("✏️ Editar", key=f"edit_tab_{linha_real_planilha}", type="primary", use_container_width=True): 
-                                    st.session_state["status_credito_deps"] = None
-                                    carregar_proposta_para_simulador(linha_real_planilha, row.to_dict(), df_produtos, df_leads)
-                                    st.rerun()
-                            with c_a2:
-                                if st.button("⚙️ Status", key=f"ren_tab_{linha_real_planilha}", use_container_width=True): 
-                                    st.session_state["renovar_proposta_idx"] = linha_real_planilha
-                                    st.session_state["renovar_proposta_dados"] = row.to_dict()
-                                    st.rerun()
+                            if docx_bytes: st.download_button("📝 Download Contrato", data=docx_bytes, file_name=f"Contrato_{cliente}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True, type="primary", key=f"dl_cx_{linha_real_planilha}")
+                        with c_b3:
+                            if status == "Em Negociação":
+                                if st.button("🔄 Editar", key=f"ren_tab_{linha_real_planilha}", type="primary", use_container_width=True): st.session_state["renovar_proposta_idx"] = linha_real_planilha; st.session_state["renovar_proposta_dados"] = row.to_dict(); st.rerun()
             else:
                 for idx, row in df_prop.iterrows():
                     linha_real_planilha = row.name + 2 
@@ -1036,14 +1028,43 @@ def tela_principal():
                 with c_cred1:
                     if st.button("⚙️ Consultar Crédito", use_container_width=True):
                         st.session_state["status_credito_deps"] = "Aprovado"
+                        
+                        # --- INTEGRAÇÃO BRASILAPI / CÁLCULO DE IDADE ---
+                        doc_limpo = re.sub(r'\D', '', cpf_cnpj_lead)
+                        tempo_str = "Não identificado"
+                        try:
+                            if len(doc_limpo) == 14: # CNPJ
+                                resp = requests.get(f"https://brasilapi.com.br/api/cnpj/v1/{doc_limpo}", timeout=5)
+                                if resp.status_code == 200:
+                                    dados_cnpj = resp.json()
+                                    data_inicio = dados_cnpj.get('data_inicio_atividade')
+                                    if data_inicio:
+                                        d_inicio = datetime.datetime.strptime(data_inicio, '%Y-%m-%d')
+                                        dias = (datetime.datetime.now() - d_inicio).days
+                                        anos = dias // 365
+                                        meses = (dias % 365) // 30
+                                        tempo_str = f"{anos} anos e {meses} meses"
+                            elif len(doc_limpo) == 11: # CPF
+                                data_nasc = st.session_state["lead_dados"].get("data_nascimento", "")
+                                if data_nasc:
+                                    d_nasc = datetime.datetime.strptime(data_nasc, '%d/%m/%Y')
+                                    anos = (datetime.datetime.now() - d_nasc).days // 365
+                                    tempo_str = f"{anos} anos"
+                        except Exception as e:
+                            pass
+                            
+                        st.session_state["tempo_empresa_credito"] = tempo_str
                         st.rerun()
+                        
                 with c_cred2:
                     if st.session_state.get("status_credito_deps") == "Aprovado":
-                        st.markdown("""
+                        tempo_exibicao = st.session_state.get("tempo_empresa_credito", "Não identificado")
+                        st.markdown(f"""
                             <div style="background-color: #ecfdf5; border-left: 5px solid #10b981; padding: 15px; border-radius: 8px;">
                                 <p style="margin:0; font-size: 1.1rem; color: #065f46;"><b>✅ Análise Concluída</b></p>
                                 <p style="margin:0; font-size: 0.95rem; color: #065f46;">
                                 <b>Score:</b> 1.000 | <b>Prob. Inadimplência:</b> 0% | <b>Pendências:</b> 0<br>
+                                <b>Tempo de Empresa/Idade:</b> {tempo_exibicao}<br>
                                 <b>Resultado Final:</b> Sem restrições. (Liberação total de parcelamento em Boleto)
                                 </p>
                             </div>
