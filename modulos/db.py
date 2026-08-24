@@ -12,7 +12,6 @@ def conectar_banco() -> Client:
 @st.cache_data(ttl=300)
 def carregar_produtos():
     try:
-        # Removido o .order("id") para evitar erros se a coluna não existir
         res = conectar_banco().table("Base_Produtos").select("*").execute()
         return pd.DataFrame(res.data) if res.data else pd.DataFrame()
     except: return pd.DataFrame()
@@ -116,8 +115,19 @@ def atualizar_senha_banco(email_usuario, nova_senha):
 def obter_id_por_index(tabela, row_index_planilha):
     pandas_index = row_index_planilha - 2
     df = carregar_todos_leads() if tabela == "Cadastro_Clientes" else carregar_todas_propostas()
-    if pandas_index in df.index and 'id' in df.columns:
-        return int(df.loc[pandas_index, 'id'])
+    
+    col_id = None
+    if 'id' in df.columns: col_id = 'id'
+    elif 'ID' in df.columns: col_id = 'ID'
+    
+    if not col_id:
+        st.error(f"❌ **ERRO CRÍTICO:** A tabela `{tabela}` não possui a coluna 'id'. Vá no Supabase e crie a coluna 'id' (Tipo int8, marcada como Identity e Primary Key).")
+        return None
+        
+    if pandas_index in df.index:
+        return int(df.loc[pandas_index, col_id])
+        
+    st.error(f"❌ Não foi possível encontrar a linha no banco de dados para a tabela {tabela}.")
     return None
 
 
@@ -146,7 +156,7 @@ def salvar_lead(ld, vendedor, email):
         df = carregar_todos_leads()
         return len(df) + 1 
     except Exception as err:
-        st.error(f"❌ Erro ao registrar Lead: {err}")
+        st.error(f"❌ Erro ao registrar Lead no banco: {err}")
         return None
 
 def atualizar_lead(row_index, ld):
@@ -171,7 +181,9 @@ def atualizar_lead(row_index, ld):
         }
         conectar_banco().table("Cadastro_Clientes").update(dados).eq("id", db_id).execute()
         return True
-    except: return False
+    except Exception as err:
+        st.error(f"❌ Erro ao atualizar Lead no banco: {err}")
+        return False
 
 def salvar_proposta(nome_cliente, nome_proposta, vendedor, email, total_mrr, total_setup, forma_pag, parcelas, val_parcela, itens, desc_p, desc_a, desc_i, temperatura, status_prop):
     try:
@@ -200,7 +212,9 @@ def salvar_proposta(nome_cliente, nome_proposta, vendedor, email, total_mrr, tot
         }
         conectar_banco().table("Propostas").insert(dados).execute()
         return True
-    except: return False
+    except Exception as err:
+        st.error(f"❌ Erro Supabase ao salvar proposta: {err}")
+        return False
 
 def atualizar_proposta_modificada(row_index, nome_proposta, total_mrr, total_setup, forma_pag, parcelas, val_parcela, itens, desc_p, desc_a, desc_i, temperatura, status_prop):
     try:
@@ -227,7 +241,9 @@ def atualizar_proposta_modificada(row_index, nome_proposta, total_mrr, total_set
         }
         conectar_banco().table("Propostas").update(dados).eq("id", db_id).execute()
         return True
-    except: return False
+    except Exception as err:
+        st.error(f"❌ Erro Supabase ao atualizar proposta: {err}")
+        return False
 
 def efetivar_renovacao(row_index_planilha, novo_mrr, novo_setup, nova_temp):
     try:
@@ -245,7 +261,9 @@ def efetivar_renovacao(row_index_planilha, novo_mrr, novo_setup, nova_temp):
         }
         conectar_banco().table("Propostas").update(dados).eq("id", db_id).execute()
         return True
-    except: return False
+    except Exception as err:
+        st.error(f"❌ Erro Supabase ao renovar proposta: {err}")
+        return False
 
 def efetivar_atualizacao_temperatura(row_index_planilha, nova_temp):
     try:
@@ -255,7 +273,9 @@ def efetivar_atualizacao_temperatura(row_index_planilha, nova_temp):
         agora = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         conectar_banco().table("Propostas").update({"Temperatura": nova_temp, "Data_Temperatura_Renovada": agora}).eq("id", db_id).execute()
         return True
-    except: return False
+    except Exception as err:
+        st.error(f"❌ Erro Supabase ao atualizar temperatura: {err}")
+        return False
 
 def efetivar_perda(row_index_planilha, motivo):
     try:
@@ -264,7 +284,9 @@ def efetivar_perda(row_index_planilha, motivo):
 
         conectar_banco().table("Propostas").update({"Status_Proposta": "Perdida", "Motivo_Perda": motivo}).eq("id", db_id).execute()
         return True
-    except: return False
+    except Exception as err:
+        st.error(f"❌ Erro Supabase ao efetivar perda: {err}")
+        return False
 
 def efetivar_aprovacao(row_index_planilha):
     try:
@@ -273,4 +295,6 @@ def efetivar_aprovacao(row_index_planilha):
 
         conectar_banco().table("Propostas").update({"Status_Proposta": "Aprovada", "Motivo_Perda": ""}).eq("id", db_id).execute()
         return True
-    except: return False
+    except Exception as err:
+        st.error(f"❌ Erro Supabase ao aprovar proposta: {err}")
+        return False
