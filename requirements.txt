@@ -6,3 +6,4 @@ streamlit-geolocation
 geopy
 pydeck
 python-docx
+supabase
