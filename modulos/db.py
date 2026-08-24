@@ -1,42 +1,40 @@
 import streamlit as st
 import pandas as pd
-import gspread
-from google.oauth2.service_account import Credentials
+from supabase import create_client, Client
 import datetime
 
 @st.cache_resource
-def conectar_banco():
-    escopos = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-    if "gcp_service_account" in st.secrets:
-        credenciais = Credentials.from_service_account_info(dict(st.secrets["gcp_service_account"]), scopes=escopos)
-    else:
-        credenciais = Credentials.from_service_account_file("credenciais.json", scopes=escopos)
-    return gspread.authorize(credenciais).open("BD_Aplicativo_Vendas")
+def conectar_banco() -> Client:
+    url = st.secrets["supabase"]["url"]
+    key = st.secrets["supabase"]["key"]
+    return create_client(url, key)
 
 @st.cache_data(ttl=300)
 def carregar_produtos():
-    dados = conectar_banco().worksheet("Base_Produtos").get_all_values()
-    return pd.DataFrame(dados[1:], columns=dados[0]) if len(dados) > 1 else pd.DataFrame()
+    try:
+        res = conectar_banco().table("Base_Produtos").select("*").order("id").execute()
+        return pd.DataFrame(res.data) if res.data else pd.DataFrame()
+    except: return pd.DataFrame()
 
 @st.cache_data(ttl=300)
 def carregar_valores_sensores():
     try:
-        dados = conectar_banco().worksheet("Valor_Sensor").get_all_values()
-        return pd.DataFrame(dados[1:], columns=dados[0]) if len(dados) > 1 else pd.DataFrame()
+        res = conectar_banco().table("Valor_Sensor").select("*").order("id").execute()
+        return pd.DataFrame(res.data) if res.data else pd.DataFrame()
     except: return pd.DataFrame()
 
 @st.cache_data(ttl=300)
 def carregar_valores_ponto_mo():
     try:
-        dados = conectar_banco().worksheet("Valor_Ponto").get_all_values()
-        return pd.DataFrame(dados[1:], columns=dados[0]) if len(dados) > 1 else pd.DataFrame()
+        res = conectar_banco().table("Valor_Ponto").select("*").order("id").execute()
+        return pd.DataFrame(res.data) if res.data else pd.DataFrame()
     except: return pd.DataFrame()
 
 @st.cache_data(ttl=300)
 def carregar_regras_validacao():
     try:
-        dados = conectar_banco().worksheet("Regras_Validacao").get_all_values()
-        return pd.DataFrame(dados[1:], columns=dados[0]) if len(dados) > 1 else pd.DataFrame()
+        res = conectar_banco().table("Regras_Validacao").select("*").order("id").execute()
+        return pd.DataFrame(res.data) if res.data else pd.DataFrame()
     except: return pd.DataFrame()
 
 @st.cache_data(ttl=300)
@@ -48,9 +46,9 @@ def carregar_configuracoes():
         "Temp_Proposta": 5.0, "Temp_Proposta_Varejo": 5.0, "Temp_Proposta_Cond": 5.0, "Temp_Proposta_GC": 5.0
     }
     try:
-        dados = conectar_banco().worksheet("Configuracoes").get_all_values()
-        if len(dados) > 1:
-            df_config = pd.DataFrame(dados[1:], columns=dados[0])
+        res = conectar_banco().table("Configuracoes").select("*").execute()
+        if res.data:
+            df_config = pd.DataFrame(res.data)
             for _, linha in df_config.iterrows():
                 param = str(linha.get('Parametro', '')).strip()
                 valor = str(linha.get('Valor', '')).replace("%", "").replace("R$", "").strip()
@@ -64,30 +62,31 @@ def carregar_configuracoes():
 
 @st.cache_data(ttl=300)
 def carregar_usuarios():
-    try: return pd.DataFrame(conectar_banco().worksheet("Usuarios").get_all_records())
+    try: 
+        res = conectar_banco().table("Usuarios").select("*").execute()
+        return pd.DataFrame(res.data) if res.data else pd.DataFrame()
     except Exception as e: 
-        st.error(f"⚠️ Erro de conexão com o Google Sheets: {e}")
+        st.error(f"⚠️ Erro de conexão com o Supabase: {e}")
         return pd.DataFrame()
 
 @st.cache_data(ttl=300)
 def carregar_todos_leads():
     try:
-        df = pd.DataFrame(conectar_banco().worksheet("Cadastro_Clientes").get_all_records())
-        if not df.empty:
+        res = conectar_banco().table("Cadastro_Clientes").select("*").order("id").execute()
+        if res.data:
+            df = pd.DataFrame(res.data)
             df.columns = df.columns.astype(str).str.strip()
             if 'Email_Vendedor' in df.columns: df['Email_Vendedor'] = df['Email_Vendedor'].astype(str).str.strip().str.lower()
-        return df
+            return df
+        return pd.DataFrame()
     except: return pd.DataFrame()
 
 @st.cache_data(ttl=300)
 def carregar_todas_propostas():
     try:
-        dados = conectar_banco().worksheet("Propostas").get_all_values()
-        if len(dados) > 1:
-            cabecalho = dados[0]
-            while len(cabecalho) < 19: cabecalho.append(f"Coluna_{len(cabecalho)+1}")
-            cabecalho[17], cabecalho[18] = "Temperatura", "Data_Temperatura_Renovada"
-            df = pd.DataFrame(dados[1:], columns=cabecalho)
+        res = conectar_banco().table("Propostas").select("*").order("id").execute()
+        if res.data:
+            df = pd.DataFrame(res.data)
             df.columns = df.columns.astype(str).str.strip()
             if 'Email_Vendedor' in df.columns: df['Email_Vendedor'] = df['Email_Vendedor'].astype(str).str.strip().str.lower()
             return df
@@ -107,85 +106,172 @@ def carregar_minhas_propostas(email):
 
 def atualizar_senha_banco(email_usuario, nova_senha):
     try:
-        aba = conectar_banco().worksheet("Usuarios")
-        cabecalho = aba.row_values(1)
-        if "Email" not in cabecalho or "Senha" not in cabecalho: return False
-        col_email, col_senha = cabecalho.index("Email") + 1, cabecalho.index("Senha") + 1
-        for i, email_planilha in enumerate(aba.col_values(col_email)):
-            if email_planilha.strip().lower() == email_usuario.strip().lower():
-                aba.update_cell(i + 1, col_senha, nova_senha)
-                return True
-        return False
+        conectar_banco().table("Usuarios").update({"Senha": nova_senha}).eq("Email", email_usuario).execute()
+        return True
     except: return False
+
+
+# --- TRADUTOR DE "LINHA DO EXCEL" PARA "ID DO BANCO" ---
+# Evita a necessidade de refazer a dashboard.py toda
+def obter_id_por_index(tabela, row_index_planilha):
+    pandas_index = row_index_planilha - 2
+    df = carregar_todos_leads() if tabela == "Cadastro_Clientes" else carregar_todas_propostas()
+    if pandas_index in df.index and 'id' in df.columns:
+        return int(df.loc[pandas_index, 'id'])
+    return None
+
 
 def salvar_lead(ld, vendedor, email):
     try:
-        aba = conectar_banco().worksheet("Cadastro_Clientes")
         agora = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        # Atenção: Ajustado para chamar 'data_nascimento' (minúsculo) conforme vem da memória do dashboard
-        aba.append_row([agora, ld.get("nome", ""), ld.get("cpf_cnpj", ""), ld.get("data_nascimento",""), ld.get("endereco", ""), ld.get("numero", ""), ld.get("cidade", ""), ld.get("estado", ""), ld.get("telefone", ""), ld.get("contato", ""), ld.get("email_cliente", ""), ld.get("gps", ""), vendedor, email, ""])
-        return len(aba.col_values(1))
+        dados = {
+            "Data_Cadastro": agora,
+            "Nome_Razao": ld.get("nome", ""),
+            "CPF_CNPJ": ld.get("cpf_cnpj", ""),
+            "Data_Nascimento": ld.get("data_nascimento", ""),
+            "Endereco": ld.get("endereco", ""),
+            "Numero": ld.get("numero", ""),
+            "Cidade": ld.get("cidade", ""),
+            "Estado": ld.get("estado", ""),
+            "Telefone": ld.get("telefone", ""),
+            "Contato": ld.get("contato", ""),
+            "Email_Cliente": ld.get("email_cliente", ""),
+            "Coordenadas_GPS": ld.get("gps", ""),
+            "Nome_Usuario": vendedor,
+            "Email_Vendedor": email,
+            "Data_Atualizacao": ""
+        }
+        conectar_banco().table("Cadastro_Clientes").insert(dados).execute()
+        
+        # O dashboard espera um index int simulado
+        df = carregar_todos_leads()
+        return len(df) + 1 
     except Exception as err:
         st.error(f"❌ Erro ao registrar Lead: {err}")
         return None
 
 def atualizar_lead(row_index, ld):
     try:
-        aba = conectar_banco().worksheet("Cadastro_Clientes")
+        db_id = obter_id_por_index("Cadastro_Clientes", row_index)
+        if not db_id: return False
+        
         agora = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        # Atenção: Ajustado 'data_nascimento' e o limite do Range aumentou de K para L
-        valores = [[ld.get("nome", ""), ld.get("cpf_cnpj", ""), ld.get("data_nascimento",""), ld.get("endereco", ""), ld.get("numero", ""), ld.get("cidade", ""), ld.get("estado", ""), ld.get("telefone", ""), ld.get("contato", ""), ld.get("email_cliente", ""), ld.get("gps", "")]]
-        aba.update(f"B{row_index}:L{row_index}", valores)
-        # O campo de atualização pulou para a coluna 15 devido à nova coluna
-        aba.update_cell(row_index, 15, agora) 
+        dados = {
+            "Nome_Razao": ld.get("nome", ""),
+            "CPF_CNPJ": ld.get("cpf_cnpj", ""),
+            "Data_Nascimento": ld.get("data_nascimento", ""),
+            "Endereco": ld.get("endereco", ""),
+            "Numero": ld.get("numero", ""),
+            "Cidade": ld.get("cidade", ""),
+            "Estado": ld.get("estado", ""),
+            "Telefone": ld.get("telefone", ""),
+            "Contato": ld.get("contato", ""),
+            "Email_Cliente": ld.get("email_cliente", ""),
+            "Coordenadas_GPS": ld.get("gps", ""),
+            "Data_Atualizacao": agora
+        }
+        conectar_banco().table("Cadastro_Clientes").update(dados).eq("id", db_id).execute()
         return True
     except: return False
 
 def salvar_proposta(nome_cliente, nome_proposta, vendedor, email, total_mrr, total_setup, forma_pag, parcelas, val_parcela, itens, desc_p, desc_a, desc_i, temperatura, status_prop):
     try:
-        aba = conectar_banco().worksheet("Propostas")
         agora = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         resumo_itens = "; ".join([f"{item['quantidade']}x {item['nome']} [Cód: {item.get('codigo', '-')}] (R$ {item.get('preco_calculado', item.get('preco_venda', 0)):,.2f})" for item in itens])
-        nova_linha = [agora, nome_cliente, vendedor, email, f"R$ {total_mrr:,.2f}".replace(",", "_").replace(".", ",").replace("_", "."), f"R$ {total_setup:,.2f}".replace(",", "_").replace(".", ",").replace("_", "."), forma_pag, f"{parcelas}x", val_parcela, resumo_itens, f"{desc_p:.1f}%", f"{desc_a:.1f}%", f"{desc_i:.1f}%", status_prop, "", "", nome_proposta, temperatura, agora]
-        aba.append_row(nova_linha)
+        dados = {
+            "Data_Proposta": agora,
+            "Nome_Cliente": nome_cliente,
+            "Nome_Usuario": vendedor,
+            "Email_Vendedor": email,
+            "Total_MRR": f"R$ {total_mrr:,.2f}".replace(",", "_").replace(".", ",").replace("_", "."),
+            "Total_Setup": f"R$ {total_setup:,.2f}".replace(",", "_").replace(".", ",").replace("_", "."),
+            "Forma_Pagamento": forma_pag,
+            "Parcelas": f"{parcelas}x",
+            "Valor_Parcela": val_parcela,
+            "Itens_Orcamento": resumo_itens,
+            "Desc_Prod": f"{desc_p:.1f}%",
+            "Desc_Alarme": f"{desc_a:.1f}%",
+            "Desc_Imagem": f"{desc_i:.1f}%",
+            "Status_Proposta": status_prop,
+            "Data_Proposta_Renovada": "",
+            "Motivo_Perda": "",
+            "Nome_Proposta": nome_proposta,
+            "Temperatura": temperatura,
+            "Data_Temperatura_Renovada": agora
+        }
+        conectar_banco().table("Propostas").insert(dados).execute()
         return True
     except: return False
 
 def atualizar_proposta_modificada(row_index, nome_proposta, total_mrr, total_setup, forma_pag, parcelas, val_parcela, itens, desc_p, desc_a, desc_i, temperatura, status_prop):
     try:
-        aba = conectar_banco().worksheet("Propostas")
+        db_id = obter_id_por_index("Propostas", row_index)
+        if not db_id: return False
+
         agora = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         resumo_itens = "; ".join([f"{item['quantidade']}x {item['nome']} [Cód: {item.get('codigo', '-')}] (R$ {item.get('preco_calculado', item.get('preco_venda', 0)):,.2f})" for item in itens])
-        valores = [[f"R$ {total_mrr:,.2f}".replace(",", "_").replace(".", ",").replace("_", "."), f"R$ {total_setup:,.2f}".replace(",", "_").replace(".", ",").replace("_", "."), forma_pag, f"{parcelas}x", val_parcela, resumo_itens, f"{desc_p:.1f}%", f"{desc_a:.1f}%", f"{desc_i:.1f}%", status_prop, agora, "", nome_proposta, temperatura, agora]]
-        aba.update(f"E{row_index}:S{row_index}", valores)
+        dados = {
+            "Total_MRR": f"R$ {total_mrr:,.2f}".replace(",", "_").replace(".", ",").replace("_", "."),
+            "Total_Setup": f"R$ {total_setup:,.2f}".replace(",", "_").replace(".", ",").replace("_", "."),
+            "Forma_Pagamento": forma_pag,
+            "Parcelas": f"{parcelas}x",
+            "Valor_Parcela": val_parcela,
+            "Itens_Orcamento": resumo_itens,
+            "Desc_Prod": f"{desc_p:.1f}%",
+            "Desc_Alarme": f"{desc_a:.1f}%",
+            "Desc_Imagem": f"{desc_i:.1f}%",
+            "Status_Proposta": status_prop,
+            "Data_Proposta_Renovada": agora,
+            "Nome_Proposta": nome_proposta,
+            "Temperatura": temperatura,
+            "Data_Temperatura_Renovada": agora
+        }
+        conectar_banco().table("Propostas").update(dados).eq("id", db_id).execute()
         return True
     except: return False
 
 def efetivar_renovacao(row_index_planilha, novo_mrr, novo_setup, nova_temp):
     try:
-        aba = conectar_banco().worksheet("Propostas")
+        db_id = obter_id_por_index("Propostas", row_index_planilha)
+        if not db_id: return False
+
         agora = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        aba.update(f"E{row_index_planilha}:F{row_index_planilha}", [[novo_mrr, novo_setup]])
-        aba.update(f"N{row_index_planilha}:O{row_index_planilha}", [["Em Negociação", agora]])
-        aba.update(f"R{row_index_planilha}:S{row_index_planilha}", [[nova_temp, agora]])
+        dados = {
+            "Total_MRR": novo_mrr,
+            "Total_Setup": novo_setup,
+            "Status_Proposta": "Em Negociação",
+            "Data_Proposta_Renovada": agora,
+            "Temperatura": nova_temp,
+            "Data_Temperatura_Renovada": agora
+        }
+        conectar_banco().table("Propostas").update(dados).eq("id", db_id).execute()
         return True
     except: return False
 
 def efetivar_atualizacao_temperatura(row_index_planilha, nova_temp):
     try:
+        db_id = obter_id_por_index("Propostas", row_index_planilha)
+        if not db_id: return False
+
         agora = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        conectar_banco().worksheet("Propostas").update(f"R{row_index_planilha}:S{row_index_planilha}", [[nova_temp, agora]])
+        conectar_banco().table("Propostas").update({"Temperatura": nova_temp, "Data_Temperatura_Renovada": agora}).eq("id", db_id).execute()
         return True
     except: return False
 
 def efetivar_perda(row_index_planilha, motivo):
     try:
-        conectar_banco().worksheet("Propostas").update(f"N{row_index_planilha}:P{row_index_planilha}", [["Perdida", "", motivo]])
+        db_id = obter_id_por_index("Propostas", row_index_planilha)
+        if not db_id: return False
+
+        conectar_banco().table("Propostas").update({"Status_Proposta": "Perdida", "Motivo_Perda": motivo}).eq("id", db_id).execute()
         return True
     except: return False
 
 def efetivar_aprovacao(row_index_planilha):
     try:
-        conectar_banco().worksheet("Propostas").update(f"N{row_index_planilha}:P{row_index_planilha}", [["Aprovada", "", ""]])
+        db_id = obter_id_por_index("Propostas", row_index_planilha)
+        if not db_id: return False
+
+        conectar_banco().table("Propostas").update({"Status_Proposta": "Aprovada", "Motivo_Perda": ""}).eq("id", db_id).execute()
         return True
     except: return False
