@@ -12,28 +12,29 @@ def conectar_banco() -> Client:
 @st.cache_data(ttl=300)
 def carregar_produtos():
     try:
-        res = conectar_banco().table("Base_Produtos").select("*").order("id").execute()
+        # Removido o .order("id") para evitar erros se a coluna não existir
+        res = conectar_banco().table("Base_Produtos").select("*").execute()
         return pd.DataFrame(res.data) if res.data else pd.DataFrame()
     except: return pd.DataFrame()
 
 @st.cache_data(ttl=300)
 def carregar_valores_sensores():
     try:
-        res = conectar_banco().table("Valor_Sensor").select("*").order("id").execute()
+        res = conectar_banco().table("Valor_Sensor").select("*").execute()
         return pd.DataFrame(res.data) if res.data else pd.DataFrame()
     except: return pd.DataFrame()
 
 @st.cache_data(ttl=300)
 def carregar_valores_ponto_mo():
     try:
-        res = conectar_banco().table("Valor_Ponto").select("*").order("id").execute()
+        res = conectar_banco().table("Valor_Ponto").select("*").execute()
         return pd.DataFrame(res.data) if res.data else pd.DataFrame()
     except: return pd.DataFrame()
 
 @st.cache_data(ttl=300)
 def carregar_regras_validacao():
     try:
-        res = conectar_banco().table("Regras_Validacao").select("*").order("id").execute()
+        res = conectar_banco().table("Regras_Validacao").select("*").execute()
         return pd.DataFrame(res.data) if res.data else pd.DataFrame()
     except: return pd.DataFrame()
 
@@ -72,7 +73,7 @@ def carregar_usuarios():
 @st.cache_data(ttl=300)
 def carregar_todos_leads():
     try:
-        res = conectar_banco().table("Cadastro_Clientes").select("*").order("id").execute()
+        res = conectar_banco().table("Cadastro_Clientes").select("*").execute()
         if res.data:
             df = pd.DataFrame(res.data)
             df.columns = df.columns.astype(str).str.strip()
@@ -84,7 +85,7 @@ def carregar_todos_leads():
 @st.cache_data(ttl=300)
 def carregar_todas_propostas():
     try:
-        res = conectar_banco().table("Propostas").select("*").order("id").execute()
+        res = conectar_banco().table("Propostas").select("*").execute()
         if res.data:
             df = pd.DataFrame(res.data)
             df.columns = df.columns.astype(str).str.strip()
@@ -112,7 +113,6 @@ def atualizar_senha_banco(email_usuario, nova_senha):
 
 
 # --- TRADUTOR DE "LINHA DO EXCEL" PARA "ID DO BANCO" ---
-# Evita a necessidade de refazer a dashboard.py toda
 def obter_id_por_index(tabela, row_index_planilha):
     pandas_index = row_index_planilha - 2
     df = carregar_todos_leads() if tabela == "Cadastro_Clientes" else carregar_todas_propostas()
@@ -143,7 +143,6 @@ def salvar_lead(ld, vendedor, email):
         }
         conectar_banco().table("Cadastro_Clientes").insert(dados).execute()
         
-        # O dashboard espera um index int simulado
         df = carregar_todos_leads()
         return len(df) + 1 
     except Exception as err:
