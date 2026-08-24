@@ -3,6 +3,11 @@ import pandas as pd
 from supabase import create_client, Client
 import datetime
 
+# --- RELÓGIO OFICIAL DO BRASIL ---
+def obter_data_hora_brasil():
+    fuso_br = datetime.timezone(datetime.timedelta(hours=-3))
+    return datetime.datetime.now(fuso_br).strftime("%d/%m/%Y %H:%M:%S")
+
 @st.cache_resource
 def conectar_banco() -> Client:
     url = st.secrets["supabase"]["url"]
@@ -133,7 +138,7 @@ def obter_id_por_index(tabela, row_index_planilha):
 
 def salvar_lead(ld, vendedor, email):
     try:
-        agora = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        agora = obter_data_hora_brasil()
         dados = {
             "Data_Cadastro": agora,
             "Nome_Razao": ld.get("nome", ""),
@@ -164,7 +169,7 @@ def atualizar_lead(row_index, ld):
         db_id = obter_id_por_index("Cadastro_Clientes", row_index)
         if not db_id: return False
         
-        agora = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        agora = obter_data_hora_brasil()
         dados = {
             "Nome_Razao": ld.get("nome", ""),
             "CPF_CNPJ": ld.get("cpf_cnpj", ""),
@@ -187,7 +192,7 @@ def atualizar_lead(row_index, ld):
 
 def salvar_proposta(nome_cliente, nome_proposta, vendedor, email, total_mrr, total_setup, forma_pag, parcelas, val_parcela, itens, desc_p, desc_a, desc_i, temperatura, status_prop):
     try:
-        agora = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        agora = obter_data_hora_brasil()
         resumo_itens = "; ".join([f"{item['quantidade']}x {item['nome']} [Cód: {item.get('codigo', '-')}] (R$ {item.get('preco_calculado', item.get('preco_venda', 0)):,.2f})" for item in itens])
         dados = {
             "Data_Proposta": agora,
@@ -221,7 +226,7 @@ def atualizar_proposta_modificada(row_index, nome_proposta, total_mrr, total_set
         db_id = obter_id_por_index("Propostas", row_index)
         if not db_id: return False
 
-        agora = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        agora = obter_data_hora_brasil()
         resumo_itens = "; ".join([f"{item['quantidade']}x {item['nome']} [Cód: {item.get('codigo', '-')}] (R$ {item.get('preco_calculado', item.get('preco_venda', 0)):,.2f})" for item in itens])
         dados = {
             "Total_MRR": f"R$ {total_mrr:,.2f}".replace(",", "_").replace(".", ",").replace("_", "."),
@@ -250,7 +255,7 @@ def efetivar_renovacao(row_index_planilha, novo_mrr, novo_setup, nova_temp):
         db_id = obter_id_por_index("Propostas", row_index_planilha)
         if not db_id: return False
 
-        agora = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        agora = obter_data_hora_brasil()
         dados = {
             "Total_MRR": novo_mrr,
             "Total_Setup": novo_setup,
@@ -270,7 +275,7 @@ def efetivar_atualizacao_temperatura(row_index_planilha, nova_temp):
         db_id = obter_id_por_index("Propostas", row_index_planilha)
         if not db_id: return False
 
-        agora = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        agora = obter_data_hora_brasil()
         conectar_banco().table("Propostas").update({"Temperatura": nova_temp, "Data_Temperatura_Renovada": agora}).eq("id", db_id).execute()
         return True
     except Exception as err:
