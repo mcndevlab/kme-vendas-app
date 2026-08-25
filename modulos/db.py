@@ -18,7 +18,14 @@ def conectar_banco() -> Client:
 def carregar_produtos():
     try:
         res = conectar_banco().table("Base_Produtos").select("*").execute()
-        return pd.DataFrame(res.data) if res.data else pd.DataFrame()
+        if res.data:
+            df = pd.DataFrame(res.data)
+            df.columns = df.columns.astype(str).str.strip()
+            # Limpeza: Remove espaços invisíveis e o ".0" que o banco coloca em números
+            for col in df.columns:
+                df[col] = df[col].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
+            return df
+        return pd.DataFrame()
     except: return pd.DataFrame()
 
 @st.cache_data(ttl=300)
@@ -39,7 +46,14 @@ def carregar_valores_ponto_mo():
 def carregar_regras_validacao():
     try:
         res = conectar_banco().table("Regras_Validacao").select("*").execute()
-        return pd.DataFrame(res.data) if res.data else pd.DataFrame()
+        if res.data:
+            df = pd.DataFrame(res.data)
+            df.columns = df.columns.astype(str).str.strip()
+            # Limpeza: Garante que os códigos das regras batam perfeitamente com o carrinho
+            for col in df.columns:
+                df[col] = df[col].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
+            return df
+        return pd.DataFrame()
     except: return pd.DataFrame()
 
 @st.cache_data(ttl=300)
