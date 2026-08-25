@@ -1050,7 +1050,9 @@ def tela_principal():
                             
                             prop_sel = st.selectbox("Substituir carrinho atual por:", ["Selecione..."] + opcoes_copia, key="sel_copia_orc")
                             if prop_sel != "Selecione...":
-                                if st.button("✔️ Confirmar Cópia", use_container_width=True, type="primary"):
+                                
+                                # FUNÇÃO CALLBACK PARA COPIAR DADOS ANTES DA TELA RECARREGAR
+                                def efetivar_copia():
                                     row_sel = idx_map[prop_sel]
                                     novo_carrinho = []
                                     for item in str(row_sel.get('Itens_Orcamento', '')).split(";"):
@@ -1068,8 +1070,10 @@ def tela_principal():
                                     st.session_state["desc_prod"] = converter_para_numero(row_sel.get('Desc_Prod', '0')) or None
                                     st.session_state["desc_alarme"] = converter_para_numero(row_sel.get('Desc_Alarme', '0')) or None
                                     st.session_state["desc_imagem"] = converter_para_numero(row_sel.get('Desc_Imagem', '0')) or None
+                                
+                                # ACIONADOR DO CALLBACK
+                                if st.button("✔️ Confirmar Cópia", use_container_width=True, type="primary", on_click=efetivar_copia):
                                     st.toast("🛒 Orçamento copiado e preços atualizados com sucesso!")
-                                    st.rerun()
                         else:
                             st.info("Você ainda não possui orçamentos salvos.")
 
