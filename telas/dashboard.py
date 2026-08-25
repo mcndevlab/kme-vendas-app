@@ -44,6 +44,7 @@ def carregar_proposta_para_simulador(idx_planilha, dados_prop, df_produtos, df_l
     st.session_state["status_proposta_atual"] = str(dados_prop.get('Status_Proposta', 'Selecione...'))
     st.session_state["status_credito_deps"] = None
     st.session_state["tempo_empresa_credito"] = None
+    st.session_state["situacao_cnpj"] = None
     
     nome_cliente = str(dados_prop.get('Nome_Cliente', '')).strip()
     lead_row = df_leads[df_leads['Nome_Razao'].astype(str).str.strip() == nome_cliente]
@@ -275,12 +276,12 @@ def tela_principal():
             "lead_dados": {}, "lead_salvo": False, "renovar_proposta_idx": None, 
             "proposta_idx_editando": None, "editando_lead_idx": None, "nome_proposta_atual": "", 
             "temp_proposta_atual": "Selecione...", "status_proposta_atual": "Selecione...", 
-            "status_credito_deps": None, "tempo_empresa_credito": None,
+            "status_credito_deps": None, "tempo_empresa_credito": None, "situacao_cnpj": None,
             "ultimo_gps_capturado": "", "item_aberto": None, "unidade_mo_selecionada": None, 
             "gatilho_limpar_tudo": False
         })
     if st.session_state.get("gatilho_limpar_carrinho", False):
-        st.session_state.update({"carrinho": [], "desc_prod": None, "desc_alarme": None, "desc_imagem": None, "item_aberto": None, "gatilho_limpar_carrinho": False, "status_credito_deps": None, "tempo_empresa_credito": None})
+        st.session_state.update({"carrinho": [], "desc_prod": None, "desc_alarme": None, "desc_imagem": None, "item_aberto": None, "gatilho_limpar_carrinho": False, "status_credito_deps": None, "tempo_empresa_credito": None, "situacao_cnpj": None})
     if st.session_state["msg_sucesso"] != "": st.success(st.session_state["msg_sucesso"]); st.session_state["msg_sucesso"] = ""
 
     # --- TELAS INTERNAS ---
@@ -1091,15 +1092,18 @@ def tela_principal():
                     if st.button("⚙️ Consultar Crédito", use_container_width=True):
                         st.session_state["status_credito_deps"] = "Aprovado"
                         
-                        # --- INTEGRAÇÃO BRASILAPI / CÁLCULO DE IDADE ---
+                        # --- INTEGRAÇÃO BRASILAPI / CÁLCULO DE IDADE E STATUS ---
                         doc_limpo = re.sub(r'\D', '', cpf_cnpj_lead)
                         tempo_str = "Não identificado"
+                        situacao_str = "Não identificada"
+                        
                         try:
                             if len(doc_limpo) == 14: # CNPJ
                                 resp = requests.get(f"https://brasilapi.com.br/api/cnpj/v1/{doc_limpo}", timeout=5)
                                 if resp.status_code == 200:
                                     dados_cnpj = resp.json()
                                     data_inicio = dados_cnpj.get('data_inicio_atividade')
+                                    situacao_str = str(dados_cnpj.get('descricao_situacao_cadastral', 'Não identificada')).title()
                                     if data_inicio:
                                         d_inicio = datetime.datetime.strptime(data_inicio, '%Y-%m-%d')
                                         dias = (datetime.datetime.now() - d_inicio).days
@@ -1107,6 +1111,7 @@ def tela_principal():
                                         meses = (dias % 365) // 30
                                         tempo_str = f"{anos} anos e {meses} meses"
                             elif len(doc_limpo) == 11: # CPF
+                                situacao_str = "N/A (Pessoa Física)"
                                 data_nasc = st.session_state["lead_dados"].get("data_nascimento", "")
                                 if data_nasc:
                                     d_nasc = datetime.datetime.strptime(data_nasc, '%d/%m/%Y')
@@ -1116,15 +1121,19 @@ def tela_principal():
                             pass
                             
                         st.session_state["tempo_empresa_credito"] = tempo_str
+                        st.session_state["situacao_cnpj"] = situacao_str
                         st.rerun()
                         
                 with c_cred2:
                     if st.session_state.get("status_credito_deps") == "Aprovado":
                         tempo_exibicao = st.session_state.get("tempo_empresa_credito", "Não identificado")
+                        situacao_exibicao = st.session_state.get("situacao_cnpj", "Não identificada")
+                        
                         st.markdown(f"""
                             <div style="background-color: #ecfdf5; border-left: 5px solid #10b981; padding: 15px; border-radius: 8px;">
                                 <p style="margin:0; font-size: 1.1rem; color: #065f46;"><b>✅ Análise Concluída</b></p>
                                 <p style="margin:0; font-size: 0.95rem; color: #065f46;">
+                                <b>Situação do CNPJ:</b> {situacao_exibicao}<br>
                                 <b>Score:</b> 1.000 | <b>Prob. Inadimplência:</b> 0% | <b>Pendências:</b> 0<br>
                                 <b>Tempo de Empresa/Idade:</b> {tempo_exibicao}<br>
                                 <b>Resultado Final:</b> Sem restrições. (Liberação total de parcelamento em Boleto)
