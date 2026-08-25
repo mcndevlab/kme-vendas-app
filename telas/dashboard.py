@@ -739,7 +739,7 @@ def tela_principal():
 
     elif st.session_state["etapa_atual"] == "lead":
         idx_editando_lead = st.session_state.get("editando_lead_idx")
-        st.title("👤 Atualizar Dados do Cliente" if idx_editando_lead else "👤 1. Cadastro de Novo Cliente")
+        st.write(f"### 👤 Atualizar Dados do Cliente" if idx_editando_lead else "### 👤 1. Cadastro de Novo Cliente")
         
         st.write("📍 **Preencher Localização**")
         st.caption("Clique no botão abaixo para registrar sua coordenada atual.")
@@ -854,7 +854,7 @@ def tela_principal():
                         if novo_idx: st.session_state.update({"lead_salvo": True, "etapa_atual": "simulador", "editando_lead_idx": novo_idx, "nome_proposta_atual": "", "temp_proposta_atual": "Selecione...", "status_proposta_atual": "Selecione...", "status_credito_deps": None}); st.toast("Cliente salvo!"); st.cache_data.clear(); st.rerun()
 
     elif st.session_state["etapa_atual"] == "simulador":
-        st.title("🛒 2. Simulador de Vendas")
+        st.write("### 🛒 2. Simulador de Vendas")
         if st.session_state.get("proposta_idx_editando"): st.warning("✏️ **Modo de Edição Ativo:** Você está modificando uma proposta já enviada.")
         col_lead_info, col_lead_btn = st.columns([8, 2])
         with col_lead_info: st.info(f"👤 **Cliente Ativo:** {st.session_state['lead_dados'].get('nome', '')} | 📞 {st.session_state['lead_dados'].get('telefone', '')}")
@@ -1145,7 +1145,7 @@ def tela_principal():
             # ---> FIM DA ANÁLISE DE CRÉDITO <---
 
             st.divider()
-            st.header("💳 Tabela de Parcelamento (Setup Inicial)")
+            st.write("### 💳 Tabela de Parcelamento (Setup Inicial)")
             total_setup = liq_produtos + total_mao_obra
             
             if total_setup > 0:
@@ -1162,7 +1162,7 @@ def tela_principal():
                 with st.container(height=300): st.dataframe(dados_tabela, use_container_width=True, hide_index=True)
                 
                 st.write("---")
-                st.subheader("📝 Apresentação Final para o Cliente")
+                st.write("### 📝 Apresentação Final para o Cliente")
                 col_sel1, col_sel2 = st.columns([4, 6])
                 with col_sel1: parcela_escolhida = st.selectbox("Selecione a condição fechada com o cliente:", range(1, limite_parcelas + 1), format_func=lambda x: f"{x}x parcela(s)")
                 txt_parcela, forma_limpa, mrr_formatado = dados_tabela[parcela_escolhida - 1]["Valor Parcela"], forma_pagamento.split(' ')[0], f"R$ {total_mensal:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
