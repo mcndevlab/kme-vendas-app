@@ -416,23 +416,25 @@ def gerar_documento_contrato(lead_dados, mrr_formatado, setup_formatado, condica
         
     # 2. O MAPA DE SERVIÇOS 
     mapa_servicos = {
-        "srv_2_1": ["254000000096"], 
+        "srv_2_1": [], 
         "srv_2_2": ["254000000042", "254000000377", "254000000458"], 
-        "srv_2_3": ["254000000657"], 
-        "srv_2_4": ["254000000389","254000000352"], 
-        "srv_2_5": ["254000000102"], 
-        "srv_2_6": ["254000000458"], 
+        "srv_2_3": [], 
+        "srv_2_4": [], 
+        "srv_2_5": [], 
+        "srv_2_6": [], 
         "srv_2_7": [], 
-        "srv_2_8": ["254000000628","254000000630","254000000631"], 
+        "srv_2_8": ["254000000628"], 
         "srv_2_9": [], 
-        "srv_2_10": ["254000000318"] 
+        "srv_2_10": [] 
     }
     
-    # 3. Lógica que preenche SIM ou NÃO (Já criando a Tag com chaves {{ }})
+    # 3. Lógica que preenche SIM ou NÃO
     contexto_tabela = {}
     for chave_word, codigos_vinculados in mapa_servicos.items():
         codigos_limpos = [str(c).strip().lstrip('0') for c in codigos_vinculados]
-        tag_formatada = f"{{{{{chave_word}}}}}"  # Isso cria a tag no formato {{srv_2_1}}
+        
+        # Concatenação explícita para evitar qualquer erro de interpretação
+        tag_formatada = "{{" + chave_word + "}}" 
         
         if any(cod in codigos_presentes for cod in codigos_limpos):
             contexto_tabela[tag_formatada] = "SIM"
@@ -470,25 +472,35 @@ def gerar_documento_contrato(lead_dados, mrr_formatado, setup_formatado, condica
         "{{DATA_ATUAL}}": hoje
     }
     
-    # A MÁGICA ACONTECE AQUI: Junta os "SIM/NÃO" dos serviços com as substituições principais
+    # Adiciona as tags de SIM/NÃO ao dicionário principal
     substituicoes.update(contexto_tabela)
 
-    def substituir_nas_runs(paragraphs):
-        for p in paragraphs:
-            for tag, valor in substituicoes.items():
-                if tag in p.text:
-                    for run in p.runs:
-                        if tag in run.text:
-                            run.text = run.text.replace(tag, valor)
-                    if tag in p.text:
-                        p.text = p.text.replace(tag, valor)
+    # 4. FUNÇÃO ROBUSTA DE SUBSTITUIÇÃO PARA O WORD
+    def substituir_texto_paragrafo(p):
+        # Remove espaços invisíveis que o Word gosta de inserir para quebrar as palavras
+        texto_limpo = p.text.replace('\u200b', '').replace('\u200e', '')
+        texto_novo = texto_limpo
+        
+        for tag, valor in substituicoes.items():
+            if tag in texto_novo:
+                texto_novo = texto_novo.replace(tag, str(valor))
+                
+        # Se houve mudança, sobrescreve o texto do parágrafo inteiro
+        if texto_limpo != texto_novo:
+            p.text = texto_novo
 
-    substituir_nas_runs(doc.paragraphs)
+    # Aplica a substituição em parágrafos comuns
+    for p in doc.paragraphs:
+        substituir_texto_paragrafo(p)
+        
+    # Aplica a substituição dentro das tabelas (que é onde as suas tags de serviço estão!)
     for table in doc.tables:
         for row in table.rows:
             for cell in row.cells:
-                substituir_nas_runs(cell.paragraphs)
+                for p in cell.paragraphs:
+                    substituir_texto_paragrafo(p)
 
+    import io
     buffer = io.BytesIO()
     doc.save(buffer)
     buffer.seek(0)
