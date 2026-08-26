@@ -421,7 +421,7 @@ def tela_principal():
                     with c6: st.write(setup)
 
     elif st.session_state["etapa_atual"] == "minhas_propostas":
-        st.header("💼 Minhas Propostas Enviadas")
+        st.header("💼 Minhas Propostas")
         
         c_tit, c_modo = st.columns([7, 3])
         with c_modo: modo_prop = st.radio("Modo de Exibição:", ["📱 Cartões (Celular)", "🖥️ Tabela Analítica"], key="modo_visao_propostas", horizontal=True)
@@ -563,24 +563,33 @@ def tela_principal():
                         html_prop = gerar_html_proposta(cliente, nome_prop, vendedor, itens_para_html, mrr, setup, condicao_txt)
                         docx_bytes, erro_docx = gerar_documento_contrato(lead_para_contrato, mrr, setup, condicao_txt)
                         
-                        c_b1, c_b2 = st.columns(2)
-                        with c_b1:
-                            st.download_button("📄 PDF", data=html_prop, file_name=f"Proposta_{cliente}.html", mime="text/html", use_container_width=True, type="primary", key=f"dl_tab_{linha_real_planilha}")
-                        with c_b2:
-                            if docx_bytes: st.download_button("📝 DOCX", data=docx_bytes, file_name=f"Contrato_{cliente}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True, type="primary", key=f"dl_cx_{linha_real_planilha}")
-                        
+                        opcoes_acao = ["Selecione...", "📄 PDF Proposta", "📄 PDF Contrato", "✍️ Assinar Zapsign"]
                         if status == "Em Negociação":
-                            c_a1, c_a2 = st.columns(2)
-                            with c_a1:
-                                if st.button("✏️ Editar", key=f"edit_tab_{linha_real_planilha}", type="primary", use_container_width=True): 
-                                    st.session_state["status_credito_deps"] = None
-                                    carregar_proposta_para_simulador(linha_real_planilha, row.to_dict(), df_produtos, df_leads)
-                                    st.rerun()
-                            with c_a2:
-                                if st.button("⚙️ Status", key=f"ren_tab_{linha_real_planilha}", use_container_width=True): 
-                                    st.session_state["renovar_proposta_idx"] = linha_real_planilha
-                                    st.session_state["renovar_proposta_dados"] = row.to_dict()
-                                    st.rerun()
+                            opcoes_acao.extend(["✏️ Editar no Simulador", "🔄 Alterar Status"])
+                            
+                        acao_escolhida = st.selectbox("Ações", opcoes_acao, key=f"sel_acao_tab_{linha_real_planilha}", label_visibility="collapsed")
+                        
+                        if acao_escolhida == "📄 PDF Proposta":
+                            st.download_button("📥 Baixar Proposta", data=html_prop, file_name=f"Proposta_{cliente}.html", mime="text/html", use_container_width=True, type="primary", key=f"dl_tab_{linha_real_planilha}")
+                        elif acao_escolhida == "📄 PDF Contrato":
+                            if docx_bytes:
+                                st.download_button("📥 Baixar Contrato (PDF)", data=docx_bytes, file_name=f"Contrato_{cliente}.pdf", mime="application/pdf", use_container_width=True, type="primary", key=f"dl_cx_{linha_real_planilha}")
+                        elif acao_escolhida == "✍️ Assinar Zapsign":
+                            if docx_bytes:
+                                if st.button("✔️ Enviar ZapSign", type="primary", use_container_width=True, key=f"zap_tab_{linha_real_planilha}"):
+                                    sucesso, retorno = enviar_para_zapsign(docx_bytes, cliente, lead_para_contrato.get('email_cliente', ''), lead_para_contrato.get('telefone', ''))
+                                    if sucesso: st.success(retorno)
+                                    else: st.error(retorno)
+                        elif acao_escolhida == "✏️ Editar no Simulador":
+                            if st.button("✔️ Abrir Simulador", type="primary", use_container_width=True, key=f"edit_tab_{linha_real_planilha}"):
+                                st.session_state["status_credito_deps"] = None
+                                carregar_proposta_para_simulador(linha_real_planilha, row.to_dict(), df_produtos, df_leads)
+                                st.rerun()
+                        elif acao_escolhida == "🔄 Alterar Status":
+                            if st.button("✔️ Alterar Status", type="primary", use_container_width=True, key=f"ren_tab_{linha_real_planilha}"):
+                                st.session_state["renovar_proposta_idx"] = linha_real_planilha
+                                st.session_state["renovar_proposta_dados"] = row.to_dict()
+                                st.rerun()
             else:
                 for idx, row in df_prop.iterrows():
                     linha_real_planilha = row.name + 2 
@@ -625,32 +634,36 @@ def tela_principal():
                         html_prop = gerar_html_proposta(cliente, nome_prop, vendedor, itens_para_html, mrr, setup, condicao_txt)
                         docx_bytes, erro_docx = gerar_documento_contrato(lead_para_contrato, mrr, setup, condicao_txt)
                         
-                        st.markdown("**📤 Ações da Proposta:**")
-                        c_b1, c_b2 = st.columns(2)
-                        with c_b1:
-                            st.download_button("📄 PDF Proposta", data=html_prop, file_name=f"Proposta_{cliente}.html", mime="text/html", use_container_width=True, type="primary", key=f"dl_card_{linha_real_planilha}")
-                            if docx_bytes: 
-                                st.download_button("📝 DOCX Contrato", data=docx_bytes, file_name=f"Contrato_{cliente}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True, type="primary", key=f"dl_cx_card_{linha_real_planilha}")
-                        with c_b2:
+                        st.markdown("**⚙️ Gerenciar Proposta e Negociação:**")
+                        opcoes_acao = ["Selecione...", "📄 PDF Proposta", "📄 PDF Contrato", "✍️ Assinar Zapsign"]
+                        if status == "Em Negociação":
+                            opcoes_acao.extend(["✏️ Editar no Simulador", "🔄 Alterar Status"])
+                            
+                        acao_escolhida = st.selectbox("Selecione a ação:", opcoes_acao, key=f"sel_acao_card_{linha_real_planilha}", label_visibility="collapsed")
+                        
+                        if acao_escolhida == "📄 PDF Proposta":
+                            st.download_button("📥 Baixar PDF Proposta", data=html_prop, file_name=f"Proposta_{cliente}.html", mime="text/html", use_container_width=True, type="primary", key=f"dl_card_{linha_real_planilha}")
+                        elif acao_escolhida == "📄 PDF Contrato":
                             if docx_bytes:
-                                if st.button("✍️ Assinar (ZapSign)", type="primary", use_container_width=True, key=f"zap_card_{linha_real_planilha}"):
+                                st.download_button("📥 Baixar PDF Contrato", data=docx_bytes, file_name=f"Contrato_{cliente}.pdf", mime="application/pdf", use_container_width=True, type="primary", key=f"dl_cx_card_{linha_real_planilha}")
+                            else:
+                                st.error("Erro ao gerar o contrato.")
+                        elif acao_escolhida == "✍️ Assinar Zapsign":
+                            if docx_bytes:
+                                if st.button("✔️ Confirmar Envio (ZapSign)", type="primary", use_container_width=True, key=f"zap_card_{linha_real_planilha}"):
                                     sucesso, retorno = enviar_para_zapsign(docx_bytes, cliente, lead_para_contrato.get('email_cliente', ''), lead_para_contrato.get('telefone', ''))
                                     if sucesso: st.success(retorno)
                                     else: st.error(retorno)
-                        
-                        if status == "Em Negociação":
-                            st.markdown("**⚙️ Gerenciar Negociação:**")
-                            c_m1, c_m2 = st.columns(2)
-                            with c_m1:
-                                if st.button("✏️ Editar no Simulador", key=f"edit_card_{linha_real_planilha}", type="primary", use_container_width=True): 
-                                    st.session_state["status_credito_deps"] = None
-                                    carregar_proposta_para_simulador(linha_real_planilha, row.to_dict(), df_produtos, df_leads)
-                                    st.rerun()
-                            with c_m2:
-                                if st.button("🔄 Alterar Status", key=f"ren_tab_{linha_real_planilha}", use_container_width=True): 
-                                    st.session_state["renovar_proposta_idx"] = linha_real_planilha
-                                    st.session_state["renovar_proposta_dados"] = row.to_dict()
-                                    st.rerun()
+                        elif acao_escolhida == "✏️ Editar no Simulador":
+                            if st.button("✔️ Abrir no Simulador", type="primary", use_container_width=True, key=f"edit_card_{linha_real_planilha}"):
+                                st.session_state["status_credito_deps"] = None
+                                carregar_proposta_para_simulador(linha_real_planilha, row.to_dict(), df_produtos, df_leads)
+                                st.rerun()
+                        elif acao_escolhida == "🔄 Alterar Status":
+                            if st.button("✔️ Alterar Status", type="primary", use_container_width=True, key=f"ren_card_{linha_real_planilha}"):
+                                st.session_state["renovar_proposta_idx"] = linha_real_planilha
+                                st.session_state["renovar_proposta_dados"] = row.to_dict()
+                                st.rerun()
 
     elif st.session_state["etapa_atual"] == "meus_leads":
         st.header("📋 Meus Clientes")
@@ -1234,7 +1247,7 @@ def tela_principal():
                 wa_url = f"https://api.whatsapp.com/send?phone=55{tel_numeros}&text={urllib.parse.quote(msg_wa)}"
                 
                 st.write("---")
-                st.markdown("#### 📤 Ações da Proposta")
+                st.write("#### 📤 Ações da Proposta")
                 
                 # NOVO LAYOUT: 5 COLUNAS
                 c_gerar, c_email, c_wa, c_contrato, c_zapsign = st.columns(5)
@@ -1263,7 +1276,7 @@ def tela_principal():
                 with c_contrato:
                     docx_bytes, erro_docx = gerar_documento_contrato(st.session_state["lead_dados"], mrr_formatado, setup_txt, condicao_txt)
                     if docx_bytes:
-                        st.download_button("📝 Download Contrato", data=docx_bytes, file_name=f"Contrato_{st.session_state['lead_dados'].get('nome', '')}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True, type="primary")
+                        st.download_button("📝 Download Contrato", data=docx_bytes, file_name=f"Contrato_{st.session_state['lead_dados'].get('nome', '')}.pdf", mime="application/pdf", use_container_width=True, type="primary")
                     else:
                         st.button("📝 Erro no Contrato", disabled=True, help=str(erro_docx), use_container_width=True, type="primary")
 
