@@ -21,7 +21,7 @@ from modulos.utils import (padronizar_nome, padronizar_telefone, extrair_tabela_
                            obter_detalhes_split, obter_emails_gestores, enviar_email_aprovacao, 
                            converter_para_numero, gerar_html_proposta, enviar_email_proposta_cliente,
                            gerar_documento_contrato, enviar_para_zapsign, validar_cpf, validar_cnpj, formatar_documento,
-                           converter_para_pdf_na_nuvem) # <-- Importamos a função nova aqui!
+                           converter_para_pdf_na_nuvem)
 
 def carregar_proposta_para_simulador(idx_planilha, dados_prop, df_produtos, df_leads):
     novo_carrinho = []
@@ -561,8 +561,11 @@ def tela_principal():
                             
                         itens_para_html = [{"quantidade": it["Qtd"], "nome": it["Produto / Serviço"]} for it in extrair_tabela_crm_itens(row.get('Itens_Orcamento', ''))]
                         condicao_txt = f"{str(row.get('Parcelas', '1x'))} de {str(row.get('Valor_Parcela', 'R$ 0,00'))} ({str(row.get('Forma_Pagamento', 'Boleto'))})"
+                        
                         html_prop = gerar_html_proposta(cliente, nome_prop, vendedor, itens_para_html, mrr, setup, condicao_txt)
-                        docx_bytes, erro_docx = gerar_documento_contrato(lead_para_contrato, mrr, setup, condicao_txt)
+                        
+                        # ---> SOLUÇÃO AQUI: Enviando a lista de itens da tabela para a função! <---
+                        docx_bytes, erro_docx = gerar_documento_contrato(lead_para_contrato, mrr, setup, condicao_txt, row.get('Itens_Orcamento', ''))
                         
                         opcoes_acao = ["Selecione...", "📄 PDF Proposta", "📄 PDF Contrato", "✍️ Assinar Zapsign"]
                         if status == "Em Negociação":
@@ -580,6 +583,8 @@ def tela_principal():
                                         st.download_button("📥 Baixar Contrato (PDF)", data=pdf_bytes, file_name=f"Contrato_{cliente}.pdf", mime="application/pdf", use_container_width=True, type="primary", key=f"dl_cx_{linha_real_planilha}")
                                     else:
                                         st.error(f"Erro ao converter: {erro_pdf}")
+                            else:
+                                st.error("Erro ao gerar o documento DOCX base.")
                         elif acao_escolhida == "✍️ Assinar Zapsign":
                             if docx_bytes:
                                 if st.button("✔️ Enviar ZapSign", type="primary", use_container_width=True, key=f"zap_tab_{linha_real_planilha}"):
@@ -638,7 +643,7 @@ def tela_principal():
                         itens_para_html = [{"quantidade": it["Qtd"], "nome": it["Produto / Serviço"]} for it in extrair_tabela_crm_itens(row.get('Itens_Orcamento', ''))]
                         condicao_txt = f"{str(row.get('Parcelas', '1x'))} de {str(row.get('Valor_Parcela', 'R$ 0,00'))} ({str(row.get('Forma_Pagamento', 'Boleto'))})"
                         html_prop = gerar_html_proposta(cliente, nome_prop, vendedor, itens_para_html, mrr, setup, condicao_txt)
-                        docx_bytes, erro_docx = gerar_documento_contrato(lead_para_contrato, mrr, setup, condicao_txt)
+                        docx_bytes, erro_docx = gerar_documento_contrato(lead_para_contrato, mrr, setup, condicao_txt, row.get('Itens_Orcamento', ''))
                         
                         st.markdown("**⚙️ Gerenciar Proposta e Negociação:**")
                         opcoes_acao = ["Selecione...", "📄 PDF Proposta", "📄 PDF Contrato", "✍️ Assinar Zapsign"]
@@ -657,6 +662,8 @@ def tela_principal():
                                         st.download_button("📥 Concluído! Baixar PDF", data=pdf_bytes, file_name=f"Contrato_{cliente}.pdf", mime="application/pdf", use_container_width=True, type="primary", key=f"dl_cx_card_{linha_real_planilha}")
                                     else:
                                         st.error(f"Erro: {erro_pdf}")
+                            else:
+                                st.error("Erro ao gerar o contrato docx base.")
                         elif acao_escolhida == "✍️ Assinar Zapsign":
                             if docx_bytes:
                                 if st.button("✔️ Confirmar Envio (ZapSign)", type="primary", use_container_width=True, key=f"zap_card_{linha_real_planilha}"):
@@ -1283,7 +1290,8 @@ def tela_principal():
                         st.button("💬 Enviar p/ WhatsApp", disabled=True, help="Falta Telefone no cadastro do cliente.", use_container_width=True, type="primary")
                 
                 with c_contrato:
-                    docx_bytes, erro_docx = gerar_documento_contrato(st.session_state["lead_dados"], mrr_formatado, setup_txt, condicao_txt)
+                    # ATENÇÃO: Passando o st.session_state["carrinho"] na chamada!
+                    docx_bytes, erro_docx = gerar_documento_contrato(st.session_state["lead_dados"], mrr_formatado, setup_txt, condicao_txt, st.session_state["carrinho"])
                     if docx_bytes:
                         if hasattr(st, "popover"):
                             caixa_pdf = st.popover("📄 PDF Contrato", use_container_width=True)
