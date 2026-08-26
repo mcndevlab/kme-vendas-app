@@ -20,7 +20,8 @@ from modulos.utils import (padronizar_nome, padronizar_telefone, extrair_tabela_
                            validar_inconsistencias_carrinho, calcular_novos_valores_proposta,
                            obter_detalhes_split, obter_emails_gestores, enviar_email_aprovacao, 
                            converter_para_numero, gerar_html_proposta, enviar_email_proposta_cliente,
-                           gerar_documento_contrato, enviar_para_zapsign, validar_cpf, validar_cnpj, formatar_documento)
+                           gerar_documento_contrato, enviar_para_zapsign, validar_cpf, validar_cnpj, formatar_documento,
+                           converter_para_pdf_na_nuvem) # <-- Importamos a função nova aqui!
 
 def carregar_proposta_para_simulador(idx_planilha, dados_prop, df_produtos, df_leads):
     novo_carrinho = []
@@ -573,7 +574,12 @@ def tela_principal():
                             st.download_button("📥 Baixar Proposta", data=html_prop, file_name=f"Proposta_{cliente}.html", mime="text/html", use_container_width=True, type="primary", key=f"dl_tab_{linha_real_planilha}")
                         elif acao_escolhida == "📄 PDF Contrato":
                             if docx_bytes:
-                                st.download_button("📥 Baixar Contrato (PDF)", data=docx_bytes, file_name=f"Contrato_{cliente}.pdf", mime="application/pdf", use_container_width=True, type="primary", key=f"dl_cx_{linha_real_planilha}")
+                                with st.spinner("Gerando PDF (ConvertAPI)..."):
+                                    pdf_bytes, erro_pdf = converter_para_pdf_na_nuvem(docx_bytes)
+                                    if pdf_bytes:
+                                        st.download_button("📥 Baixar Contrato (PDF)", data=pdf_bytes, file_name=f"Contrato_{cliente}.pdf", mime="application/pdf", use_container_width=True, type="primary", key=f"dl_cx_{linha_real_planilha}")
+                                    else:
+                                        st.error(f"Erro ao converter: {erro_pdf}")
                         elif acao_escolhida == "✍️ Assinar Zapsign":
                             if docx_bytes:
                                 if st.button("✔️ Enviar ZapSign", type="primary", use_container_width=True, key=f"zap_tab_{linha_real_planilha}"):
@@ -645,9 +651,12 @@ def tela_principal():
                             st.download_button("📥 Baixar PDF Proposta", data=html_prop, file_name=f"Proposta_{cliente}.html", mime="text/html", use_container_width=True, type="primary", key=f"dl_card_{linha_real_planilha}")
                         elif acao_escolhida == "📄 PDF Contrato":
                             if docx_bytes:
-                                st.download_button("📥 Baixar PDF Contrato", data=docx_bytes, file_name=f"Contrato_{cliente}.pdf", mime="application/pdf", use_container_width=True, type="primary", key=f"dl_cx_card_{linha_real_planilha}")
-                            else:
-                                st.error("Erro ao gerar o contrato.")
+                                with st.spinner("Convertendo na nuvem..."):
+                                    pdf_bytes, erro_pdf = converter_para_pdf_na_nuvem(docx_bytes)
+                                    if pdf_bytes:
+                                        st.download_button("📥 Concluído! Baixar PDF", data=pdf_bytes, file_name=f"Contrato_{cliente}.pdf", mime="application/pdf", use_container_width=True, type="primary", key=f"dl_cx_card_{linha_real_planilha}")
+                                    else:
+                                        st.error(f"Erro: {erro_pdf}")
                         elif acao_escolhida == "✍️ Assinar Zapsign":
                             if docx_bytes:
                                 if st.button("✔️ Confirmar Envio (ZapSign)", type="primary", use_container_width=True, key=f"zap_card_{linha_real_planilha}"):
@@ -1276,7 +1285,18 @@ def tela_principal():
                 with c_contrato:
                     docx_bytes, erro_docx = gerar_documento_contrato(st.session_state["lead_dados"], mrr_formatado, setup_txt, condicao_txt)
                     if docx_bytes:
-                        st.download_button("📝 Download Contrato", data=docx_bytes, file_name=f"Contrato_{st.session_state['lead_dados'].get('nome', '')}.pdf", mime="application/pdf", use_container_width=True, type="primary")
+                        if hasattr(st, "popover"):
+                            caixa_pdf = st.popover("📄 PDF Contrato", use_container_width=True)
+                            with caixa_pdf:
+                                if st.button("🔄 Iniciar Conversão para PDF", use_container_width=True):
+                                    with st.spinner("Convertendo na nuvem..."):
+                                        pdf_bytes, err = converter_para_pdf_na_nuvem(docx_bytes)
+                                        if pdf_bytes:
+                                            st.download_button("📥 Baixar PDF Agora", data=pdf_bytes, file_name=f"Contrato_{st.session_state['lead_dados'].get('nome', '')}.pdf", mime="application/pdf", use_container_width=True, type="primary")
+                                        else:
+                                            st.error(err)
+                        else:
+                            st.download_button("📝 Download Contrato (DOCX)", data=docx_bytes, file_name=f"Contrato_{st.session_state['lead_dados'].get('nome', '')}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True, type="primary")
                     else:
                         st.button("📝 Erro no Contrato", disabled=True, help=str(erro_docx), use_container_width=True, type="primary")
 
