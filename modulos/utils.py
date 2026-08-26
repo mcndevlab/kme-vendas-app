@@ -404,15 +404,28 @@ def gerar_html_proposta(cliente, proposta, vendedor, itens_carrinho, mrr, setup,
     return html
 
 def gerar_documento_contrato(lead_dados, mrr_formatado, setup_formatado, condicao_txt, itens_orcamento=None):
+    
+    # --- NOVO: Trator de Limpeza de Códigos ---
+    def limpar_codigo(c):
+        c = str(c).strip().upper()
+        if c.endswith('.0'): # Remove decimais fantasmas do Pandas/Supabase
+            c = c[:-2]
+        return c.lstrip('0') # Remove zeros à esquerda por segurança
+
     # 1. Extrair quais códigos de produtos estão no orçamento
     codigos_presentes = []
     if isinstance(itens_orcamento, list): 
-        # Veio do Simulador (Carrinho aberto)
-        codigos_presentes = [str(it.get('codigo', '')).strip().lstrip('0') for it in itens_orcamento]
+        # Veio do Simulador (Carrinho ativo)
+        for it in itens_orcamento:
+            cod = it.get('codigo', '')
+            if cod and cod != '-': codigos_presentes.append(limpar_codigo(cod))
+            
     elif isinstance(itens_orcamento, str): 
         # Veio do Banco de Dados (Propostas Salvas)
         import re
-        codigos_presentes = [str(c).strip().lstrip('0') for c in re.findall(r'\[Cód:\s*(.*?)\]', itens_orcamento)]
+        encontrados = re.findall(r'\[Cód:\s*(.*?)\]', itens_orcamento)
+        for cod in encontrados:
+            if cod and cod != '-': codigos_presentes.append(limpar_codigo(cod))
         
     # 2. O MAPA DE SERVIÇOS 
     mapa_servicos = {
@@ -431,11 +444,11 @@ def gerar_documento_contrato(lead_dados, mrr_formatado, setup_formatado, condica
     # 3. Lógica que preenche SIM ou NÃO
     contexto_tabela = {}
     for chave_word, codigos_vinculados in mapa_servicos.items():
-        codigos_limpos = [str(c).strip().lstrip('0') for c in codigos_vinculados]
-        
-        # Concatenação explícita para evitar qualquer erro de interpretação
+        # Limpa os códigos do mapa também para garantir 100% de match
+        codigos_limpos = [limpar_codigo(c) for c in codigos_vinculados if c]
         tag_formatada = "{{" + chave_word + "}}" 
         
+        # Se QUALQUER código do serviço estiver presente no carrinho -> SIM
         if any(cod in codigos_presentes for cod in codigos_limpos):
             contexto_tabela[tag_formatada] = "SIM"
         else:
@@ -475,25 +488,19 @@ def gerar_documento_contrato(lead_dados, mrr_formatado, setup_formatado, condica
     # Adiciona as tags de SIM/NÃO ao dicionário principal
     substituicoes.update(contexto_tabela)
 
-    # 4. FUNÇÃO ROBUSTA DE SUBSTITUIÇÃO PARA O WORD
+    # 4. TRATOR DE SUBSTITUIÇÃO (Ignora caracteres ocultos do Word)
     def substituir_texto_paragrafo(p):
-        # Remove espaços invisíveis que o Word gosta de inserir para quebrar as palavras
         texto_limpo = p.text.replace('\u200b', '').replace('\u200e', '')
         texto_novo = texto_limpo
-        
         for tag, valor in substituicoes.items():
             if tag in texto_novo:
                 texto_novo = texto_novo.replace(tag, str(valor))
-                
-        # Se houve mudança, sobrescreve o texto do parágrafo inteiro
         if texto_limpo != texto_novo:
             p.text = texto_novo
 
-    # Aplica a substituição em parágrafos comuns
     for p in doc.paragraphs:
         substituir_texto_paragrafo(p)
         
-    # Aplica a substituição dentro das tabelas (que é onde as suas tags de serviço estão!)
     for table in doc.tables:
         for row in table.rows:
             for cell in row.cells:
