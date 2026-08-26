@@ -403,7 +403,42 @@ def gerar_html_proposta(cliente, proposta, vendedor, itens_carrinho, mrr, setup,
     """
     return html
 
-def gerar_documento_contrato(lead_dados, mrr_formatado, setup_formatado, condicao_txt):
+def gerar_documento_contrato(lead_dados, mrr_formatado, setup_formatado, condicao_txt, itens_orcamento=None):
+    # 1. Extrair quais códigos de produtos estão no orçamento
+    codigos_presentes = []
+    if isinstance(itens_orcamento, list): 
+        # Veio do Simulador (Carrinho aberto)
+        codigos_presentes = [str(it.get('codigo', '')).strip().lstrip('0') for it in itens_orcamento]
+    elif isinstance(itens_orcamento, str): 
+        # Veio do Banco de Dados (Propostas Salvas)
+        import re
+        codigos_presentes = [str(c).strip().lstrip('0') for c in re.findall(r'\[Cód:\s*(.*?)\]', itens_orcamento)]
+        
+    # 2. O MAPA DE SERVIÇOS 
+    mapa_servicos = {
+        "srv_2_1": [], 
+        "srv_2_2": ["254000000042", "254000000377", "254000000458"], 
+        "srv_2_3": [], 
+        "srv_2_4": [], 
+        "srv_2_5": [], 
+        "srv_2_6": [], 
+        "srv_2_7": [], 
+        "srv_2_8": ["254000000628"], 
+        "srv_2_9": [], 
+        "srv_2_10": [] 
+    }
+    
+    # 3. Lógica que preenche SIM ou NÃO (Já criando a Tag com chaves {{ }})
+    contexto_tabela = {}
+    for chave_word, codigos_vinculados in mapa_servicos.items():
+        codigos_limpos = [str(c).strip().lstrip('0') for c in codigos_vinculados]
+        tag_formatada = f"{{{{{chave_word}}}}}"  # Isso cria a tag no formato {{srv_2_1}}
+        
+        if any(cod in codigos_presentes for cod in codigos_limpos):
+            contexto_tabela[tag_formatada] = "SIM"
+        else:
+            contexto_tabela[tag_formatada] = "NÃO"
+    
     try:
         from docx import Document
     except ImportError:
@@ -420,6 +455,7 @@ def gerar_documento_contrato(lead_dados, mrr_formatado, setup_formatado, condica
 
     hoje = datetime.datetime.now().strftime("%d/%m/%Y")
     
+    # Dicionário base com os dados do cliente
     substituicoes = {
         "{{NOME_CLIENTE}}": str(lead_dados.get("nome", "")),
         "{{CPF_CNPJ}}": str(lead_dados.get("cpf_cnpj", "")),
@@ -433,6 +469,9 @@ def gerar_documento_contrato(lead_dados, mrr_formatado, setup_formatado, condica
         "{{CONDICAO_PGTO}}": str(condicao_txt),
         "{{DATA_ATUAL}}": hoje
     }
+    
+    # A MÁGICA ACONTECE AQUI: Junta os "SIM/NÃO" dos serviços com as substituições principais
+    substituicoes.update(contexto_tabela)
 
     def substituir_nas_runs(paragraphs):
         for p in paragraphs:
