@@ -494,3 +494,21 @@ def enviar_para_zapsign(docx_bytes, nome_cliente, email_cliente, telefone_client
             
     except Exception as e:
         return False, f"Erro na integração: {str(e)}"
+
+def converter_para_pdf_na_nuvem(docx_bytes):
+    try:
+        secret = st.secrets["convertapi"]["secret"]
+        url = f"https://v2.convertapi.com/convert/docx/to/pdf?Secret={secret}"
+        
+        # Envia o arquivo Word em bytes para a API
+        files = {'file': ('contrato.docx', docx_bytes)}
+        res = requests.post(url, files=files)
+        
+        # Se der certo, pega o PDF e devolve para o botão de download
+        if res.status_code == 200:
+            pdf_b64 = res.json()['Files'][0]['FileData']
+            return base64.b64decode(pdf_b64), None
+        else:
+            return None, res.json().get('Message', 'Erro na API')
+    except Exception as e:
+        return None, f"Erro de conexão: {str(e)}"
