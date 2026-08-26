@@ -416,16 +416,16 @@ def gerar_documento_contrato(lead_dados, mrr_formatado, setup_formatado, condica
         
     # 2. O MAPA DE SERVIÇOS 
     mapa_servicos = {
-        "srv_2_1": [], 
+        "srv_2_1": ["254000000096"], 
         "srv_2_2": ["254000000042", "254000000377", "254000000458"], 
-        "srv_2_3": [], 
-        "srv_2_4": [], 
-        "srv_2_5": [], 
-        "srv_2_6": [], 
+        "srv_2_3": ["254000000657"], 
+        "srv_2_4": ["254000000389","254000000352"], 
+        "srv_2_5": ["254000000102"], 
+        "srv_2_6": ["254000000458"], 
         "srv_2_7": [], 
-        "srv_2_8": ["254000000628"], 
+        "srv_2_8": ["254000000628","254000000630","254000000631"], 
         "srv_2_9": [], 
-        "srv_2_10": [] 
+        "srv_2_10": ["254000000318"] 
     }
     
     # 3. Lógica que preenche SIM ou NÃO (Já criando a Tag com chaves {{ }})
