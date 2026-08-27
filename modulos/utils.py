@@ -189,7 +189,7 @@ def calcular_novos_valores_proposta(row_data, df_produtos, df_valor_sensor):
         elif "produto" in cat or "equipamento" in cat: bruto_prod += (v_u * qtd)
         else:
             if "imagem" in grupo: bruto_imagem += (v_u * qtd)
-            else: bruto_alarme += (v_u * item['quantidade'])
+            else: bruto_alarme += (v_u * qtd)  # <--- O ERRO ESTAVA AQUI! Foi corrigido para `qtd`.
             
     novo_total_mrr, novo_total_setup = (bruto_alarme * (1 - desc_a)) + (bruto_imagem * (1 - desc_i)), (bruto_prod * (1 - desc_p)) + mao_obra
     return f"R$ {novo_total_mrr:,.2f}".replace(",", "_").replace(".", ",").replace("_", "."), f"R$ {novo_total_setup:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
