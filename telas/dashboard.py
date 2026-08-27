@@ -406,6 +406,52 @@ def tela_principal():
             st.markdown("**Volume do Pipeline**")
             dados_funil = pd.DataFrame({"Etapa": ["1. Clientes Adicionados", "2. Propostas Enviadas", "3. Vendas Fechadas"], "Quantidade": [total_leads, total_propostas, total_aprovadas]}).set_index("Etapa")
             st.bar_chart(dados_funil)
+            
+        # --- RANKING DE VENDAS ---
+        st.divider()
+        st.markdown("#### 🏆 Ranking de Vendas da Equipe (Aprovadas)")
+        
+        if not df_aprovadas.empty:
+            # Agrupar os dados dos vendedores
+            df_ranking = df_aprovadas.groupby('Email_Vendedor').agg(
+                Vendedor=('Nome_Usuario', 'first'),
+                Receita_Mensalidade=('Val_MRR', 'sum'),
+                Receita_Setup=('Val_Setup', 'sum')
+            ).reset_index()
+
+            # Mapear Unidade
+            mapa_unidades = dict(zip(df_users['Email_C'], df_users['Unidade']))
+            df_ranking['Unidade'] = df_ranking['Email_Vendedor'].apply(lambda e: str(mapa_unidades.get(e, '-')))
+
+            # Opções de Ordenação
+            c_vazio_rank, c_sort_rank = st.columns([6, 4])
+            with c_sort_rank:
+                sort_rank_opt = st.selectbox("Ordenar Ranking por:", [
+                    "Mensalidade (Maior Valor)", "Mensalidade (Menor Valor)",
+                    "Setup (Maior Valor)", "Setup (Menor Valor)"
+                ], label_visibility="collapsed")
+                
+            # Aplicar ordenação Matemática
+            if sort_rank_opt == "Mensalidade (Maior Valor)":
+                df_ranking = df_ranking.sort_values(by='Receita_Mensalidade', ascending=False)
+            elif sort_rank_opt == "Mensalidade (Menor Valor)":
+                df_ranking = df_ranking.sort_values(by='Receita_Mensalidade', ascending=True)
+            elif sort_rank_opt == "Setup (Maior Valor)":
+                df_ranking = df_ranking.sort_values(by='Receita_Setup', ascending=False)
+            elif sort_rank_opt == "Setup (Menor Valor)":
+                df_ranking = df_ranking.sort_values(by='Receita_Setup', ascending=True)
+
+            # Formatar para exibição após ordenar
+            df_ranking['Receita Mensalidade'] = df_ranking['Receita_Mensalidade'].apply(lambda x: f"R$ {x:,.2f}".replace(",", "_").replace(".", ",").replace("_", "."))
+            df_ranking['Receita Setup'] = df_ranking['Receita_Setup'].apply(lambda x: f"R$ {x:,.2f}".replace(",", "_").replace(".", ",").replace("_", "."))
+            
+            # Selecionar colunas finais e criar a posição 1º, 2º...
+            df_exibicao = df_ranking[['Vendedor', 'Unidade', 'Receita Mensalidade', 'Receita Setup']].reset_index(drop=True)
+            df_exibicao.index = df_exibicao.index + 1 # O index do dataframe agora servirá como o número da posição no ranking
+            
+            st.dataframe(df_exibicao, use_container_width=True)
+        else:
+            st.info("Nenhuma venda fechada no período selecionado para gerar o ranking.")
 
     elif st.session_state["etapa_atual"] == "mapa_equipe":
         st.header("🗺️ Localização da Equipe")
@@ -735,6 +781,7 @@ def tela_principal():
                         condicao_txt = f"{str(row.get('Parcelas', '1x'))} de {str(row.get('Valor_Parcela', 'R$ 0,00'))} ({str(row.get('Forma_Pagamento', 'Boleto'))})"
                         
                         html_prop = gerar_html_proposta(cliente, nome_prop, vendedor, itens_para_html, mrr, setup, condicao_txt)
+                        
                         docx_bytes, erro_docx = gerar_documento_contrato(lead_para_contrato, mrr, setup, condicao_txt, row.get('Itens_Orcamento', ''))
                         
                         opcoes_acao = ["Selecione...", "📄 PDF Proposta", "📄 PDF Contrato", "✍️ Assinar Zapsign"]
