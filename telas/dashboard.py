@@ -167,8 +167,12 @@ def tela_principal():
             status = str(row.get('Status_Proposta', '')).strip()
             if status in ["Perdida", "Fechada", "Aprovada"]: continue
             
-            data_ref_prop_str = str(row.get('Data_Proposta_Renovada', '')).strip() or str(row.get('Data_Proposta', '')).strip()
-            data_ref_temp_str = str(row.get('Data_Temperatura_Renovada', '')).strip() or str(row.get('Data_Proposta', '')).strip()
+            # Limpeza do NaN que estava causando o bug do vencimento da proposta
+            prop_renovada = str(row.get('Data_Proposta_Renovada', '')).replace('nan', '').replace('None', '').strip()
+            data_ref_prop_str = prop_renovada if prop_renovada else str(row.get('Data_Proposta', '')).replace('nan', '').replace('None', '').strip()
+            
+            temp_renovada = str(row.get('Data_Temperatura_Renovada', '')).replace('nan', '').replace('None', '').strip()
+            data_ref_temp_str = temp_renovada if temp_renovada else str(row.get('Data_Proposta', '')).replace('nan', '').replace('None', '').strip()
             
             try:
                 data_ref_prop = datetime.datetime.strptime(data_ref_prop_str, "%d/%m/%Y %H:%M:%S") if " " in data_ref_prop_str else datetime.datetime.strptime(data_ref_prop_str, "%d/%m/%Y")
@@ -387,8 +391,11 @@ def tela_principal():
                     temperatura = str(row.get('Temperatura', 'Morno 🌤️')).split(" ")[0]
                     mrr, setup = str(row.get('Total_MRR', '')), str(row.get('Total_Setup', ''))
                     
-                    data_ref_prop_str = str(row.get('Data_Proposta_Renovada', '')).strip() or str(row.get('Data_Proposta', '')).strip()
-                    data_ref_temp_str = str(row.get('Data_Temperatura_Renovada', '')).strip() or str(row.get('Data_Proposta', '')).strip()
+                    prop_renovada = str(row.get('Data_Proposta_Renovada', '')).replace('nan', '').replace('None', '').strip()
+                    data_ref_prop_str = prop_renovada if prop_renovada else str(row.get('Data_Proposta', '')).replace('nan', '').replace('None', '').strip()
+                    
+                    temp_renovada = str(row.get('Data_Temperatura_Renovada', '')).replace('nan', '').replace('None', '').strip()
+                    data_ref_temp_str = temp_renovada if temp_renovada else str(row.get('Data_Proposta', '')).replace('nan', '').replace('None', '').strip()
                     
                     tempo_faltante = "-"
                     if status == "Em Negociação":
@@ -518,8 +525,12 @@ def tela_principal():
                     cliente, nome_prop = str(row.get('Nome_Cliente', '')), str(row.get('Nome_Proposta', 'Principal'))
                     status, mrr, setup = str(row.get('Status_Proposta', 'Em Negociação')).strip() or "Em Negociação", str(row.get('Total_MRR', '')), str(row.get('Total_Setup', ''))
                     temperatura = str(row.get('Temperatura', 'Morno 🌤️')).split(" ")[0]
-                    data_ref_prop_str = str(row.get('Data_Proposta_Renovada', '')).strip() or str(row.get('Data_Proposta', '')).strip()
-                    data_ref_temp_str = str(row.get('Data_Temperatura_Renovada', '')).strip() or str(row.get('Data_Proposta', '')).strip()
+                    
+                    prop_renovada = str(row.get('Data_Proposta_Renovada', '')).replace('nan', '').replace('None', '').strip()
+                    data_ref_prop_str = prop_renovada if prop_renovada else str(row.get('Data_Proposta', '')).replace('nan', '').replace('None', '').strip()
+                    
+                    temp_renovada = str(row.get('Data_Temperatura_Renovada', '')).replace('nan', '').replace('None', '').strip()
+                    data_ref_temp_str = temp_renovada if temp_renovada else str(row.get('Data_Proposta', '')).replace('nan', '').replace('None', '').strip()
                     vendedor = str(row.get('Nome_Usuario', ''))
                     
                     tempo_faltante = "-"
@@ -607,8 +618,12 @@ def tela_principal():
                     data_p, cliente, nome_prop = str(row.get('Data_Proposta', '')).split(" ")[0], str(row.get('Nome_Cliente', '')), str(row.get('Nome_Proposta', 'Principal'))
                     status, mrr, setup = str(row.get('Status_Proposta', 'Em Negociação')).strip() or "Em Negociação", str(row.get('Total_MRR', '')), str(row.get('Total_Setup', ''))
                     temperatura = str(row.get('Temperatura', 'Morno 🌤️')).split(" ")[0]
-                    data_ref_prop_str = str(row.get('Data_Proposta_Renovada', '')).strip() or str(row.get('Data_Proposta', '')).strip()
-                    data_ref_temp_str = str(row.get('Data_Temperatura_Renovada', '')).strip() or str(row.get('Data_Proposta', '')).strip()
+                    
+                    prop_renovada = str(row.get('Data_Proposta_Renovada', '')).replace('nan', '').replace('None', '').strip()
+                    data_ref_prop_str = prop_renovada if prop_renovada else str(row.get('Data_Proposta', '')).replace('nan', '').replace('None', '').strip()
+                    
+                    temp_renovada = str(row.get('Data_Temperatura_Renovada', '')).replace('nan', '').replace('None', '').strip()
+                    data_ref_temp_str = temp_renovada if temp_renovada else str(row.get('Data_Proposta', '')).replace('nan', '').replace('None', '').strip()
                     vendedor = str(row.get('Nome_Usuario', ''))
                     
                     tempo_faltante = "-"
@@ -1011,7 +1026,7 @@ def tela_principal():
                     itens_mo = df_produtos[df_produtos['Categoria_Receita'].fillna("").astype(str).str.lower().str.contains("obra|instala")]
                     with st.container(height=500):
                         if not itens_mo.empty:
-                            for index, linha in itens_mo.iterrows(): desenhar_card_produto(index, linha)
+                            for index, linha in itens_iterrows(): desenhar_card_produto(index, linha)
 
             with col_resumo:
                 bruto_alarme, bruto_imagem, bruto_produtos, total_mao_obra = 0.0, 0.0, 0.0, 0.0
