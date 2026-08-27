@@ -376,7 +376,46 @@ def tela_principal():
         with aba_prop:
             if df_eq_prop.empty: st.info("Nenhuma proposta encontrada para esta seleção.")
             else:
-                df_eq_prop = df_eq_prop.iloc[::-1]
+                # --- SISTEMA DE ORDENAÇÃO APLICADO AQUI ---
+                df_eq_prop = df_eq_prop.copy()
+                
+                # Criando colunas invisíveis para facilitar a ordenação matemática
+                df_eq_prop['Data_Sort'] = pd.to_datetime(df_eq_prop['Data_Proposta'].astype(str).str.split(" ").str[0], format='%d/%m/%Y', errors='coerce')
+                
+                def converter_moeda_para_sort(valor):
+                    try:
+                        v = str(valor).replace('R$', '').strip()
+                        v = v.replace('.', '').replace(',', '.')
+                        return float(v)
+                    except: return 0.0
+                df_eq_prop['Servicos_Sort'] = df_eq_prop['Total_MRR'].apply(converter_moeda_para_sort)
+                
+                temp_map = {"Quente": 3, "Morno": 2, "Frio": 1}
+                df_eq_prop['Temp_Sort'] = df_eq_prop['Temperatura'].astype(str).apply(lambda x: temp_map.get(x.split(" ")[0], 0))
+
+                # Caixa de Seleção de Ordenação
+                c_vazio, c_sort = st.columns([6, 4])
+                with c_sort:
+                    sort_option = st.selectbox("Ordenar por:", [
+                        "Data (Mais recentes)", "Data (Mais antigas)",
+                        "Temperatura (Quente > Frio)", "Temperatura (Frio > Quente)",
+                        "Serviços (Maior Valor)", "Serviços (Menor Valor)"
+                    ], label_visibility="collapsed")
+                
+                # Aplicando a ordenação com base na seleção
+                if sort_option == "Data (Mais recentes)":
+                    df_eq_prop = df_eq_prop.sort_values(by='Data_Sort', ascending=False)
+                elif sort_option == "Data (Mais antigas)":
+                    df_eq_prop = df_eq_prop.sort_values(by='Data_Sort', ascending=True)
+                elif sort_option == "Temperatura (Quente > Frio)":
+                    df_eq_prop = df_eq_prop.sort_values(by=['Temp_Sort', 'Data_Sort'], ascending=[False, False])
+                elif sort_option == "Temperatura (Frio > Quente)":
+                    df_eq_prop = df_eq_prop.sort_values(by=['Temp_Sort', 'Data_Sort'], ascending=[True, False])
+                elif sort_option == "Serviços (Maior Valor)":
+                    df_eq_prop = df_eq_prop.sort_values(by='Servicos_Sort', ascending=False)
+                elif sort_option == "Serviços (Menor Valor)":
+                    df_eq_prop = df_eq_prop.sort_values(by='Servicos_Sort', ascending=True)
+
                 hoje = datetime.datetime.now()
                 h1, h_v, h2, h_np, h3, h_temp, h4, h5, h6 = st.columns([2, 2, 3, 2.5, 2, 2, 2.5, 2, 2])
                 with h1: st.markdown("**Data**")
@@ -592,7 +631,6 @@ def tela_principal():
                         
                         html_prop = gerar_html_proposta(cliente, nome_prop, vendedor, itens_para_html, mrr, setup, condicao_txt)
                         
-                        # ---> SOLUÇÃO AQUI: Enviando a lista de itens da tabela para a função! <---
                         docx_bytes, erro_docx = gerar_documento_contrato(lead_para_contrato, mrr, setup, condicao_txt, row.get('Itens_Orcamento', ''))
                         
                         opcoes_acao = ["Selecione...", "📄 PDF Proposta", "📄 PDF Contrato", "✍️ Assinar Zapsign"]
