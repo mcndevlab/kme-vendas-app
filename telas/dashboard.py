@@ -377,14 +377,22 @@ def tela_principal():
         with c_m1:
             perc_mrr = (realizado_mrr / meta_prop_mrr * 100) if meta_prop_mrr > 0 else 0.0
             st.markdown(f"**Receita Recorrente (Mensalidade) - Dia {dia_ref}/30**")
-            st.caption(f"Meta Alvo Diária: R$ {meta_prop_mrr:,.2f} | Realizado: **R$ {realizado_mrr:,.2f}**")
+            
+            meta_mrr_fmt = f"R$ {meta_prop_mrr:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+            realizado_mrr_fmt = f"R$ {realizado_mrr:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+            
+            st.markdown(f"<p style='margin-bottom: 5px; font-size: 0.95rem; color: #475569;'>Meta Alvo Diária: {meta_mrr_fmt} | Realizado: <b style='color: #0f172a;'>{realizado_mrr_fmt}</b></p>", unsafe_allow_html=True)
             st.progress(min(perc_mrr / 100, 1.0))
             st.markdown(f"<p style='text-align:right; margin-top:-10px; font-size:0.85rem; color:{'#10b981' if perc_mrr>=100 else '#f59e0b'};'><b>{perc_mrr:.1f}% Atingido</b></p>", unsafe_allow_html=True)
             
         with c_m2:
             perc_setup = (realizado_setup / meta_prop_setup * 100) if meta_prop_setup > 0 else 0.0
             st.markdown(f"**Receita Imediata (Equip. + MO) - Dia {dia_ref}/30**")
-            st.caption(f"Meta Alvo Diária: R$ {meta_prop_setup:,.2f} | Realizado: **R$ {realizado_setup:,.2f}**")
+            
+            meta_setup_fmt = f"R$ {meta_prop_setup:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+            realizado_setup_fmt = f"R$ {realizado_setup:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+            
+            st.markdown(f"<p style='margin-bottom: 5px; font-size: 0.95rem; color: #475569;'>Meta Alvo Diária: {meta_setup_fmt} | Realizado: <b style='color: #0f172a;'>{realizado_setup_fmt}</b></p>", unsafe_allow_html=True)
             st.progress(min(perc_setup / 100, 1.0))
             st.markdown(f"<p style='text-align:right; margin-top:-10px; font-size:0.85rem; color:{'#10b981' if perc_setup>=100 else '#f59e0b'};'><b>{perc_setup:.1f}% Atingido</b></p>", unsafe_allow_html=True)
             
