@@ -10,6 +10,16 @@ st.set_page_config(
     initial_sidebar_state="expanded" # <-- Este é o comando que força o menu a abrir
 )
 
+# Esconde a marca d'água do Streamlit, o menu superior e o rodapé
+esconder_elementos = """
+    <style>
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    </style>
+    """
+st.markdown(esconder_elementos, unsafe_allow_html=True)
+
 # 2. Estilização CSS Padrão
 st.markdown("""
     <style>
