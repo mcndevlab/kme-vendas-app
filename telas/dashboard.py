@@ -167,7 +167,6 @@ def tela_principal():
             status = str(row.get('Status_Proposta', '')).strip()
             if status in ["Perdida", "Fechada", "Aprovada"]: continue
             
-            # Limpeza do NaN que estava causando o bug do vencimento da proposta
             prop_renovada = str(row.get('Data_Proposta_Renovada', '')).replace('nan', '').replace('None', '').strip()
             data_ref_prop_str = prop_renovada if prop_renovada else str(row.get('Data_Proposta', '')).replace('nan', '').replace('None', '').strip()
             
@@ -241,7 +240,16 @@ def tela_principal():
                         mrr_a, setup_a = p['dados'].get('Total_MRR', ''), p['dados'].get('Total_Setup', '')
                         pode_salvar = True
                         if mrr_n != mrr_a or setup_n != setup_a:
-                            st.warning(f"⚠️ **ATENÇÃO:** Os preços da tabela base foram atualizados!\n\n**Total Serviços:** de {mrr_a} ➡️ **{mrr_n}**\n**Setup:** de {setup_a} ➡️ **{setup_n}**")
+                            st.markdown(f"""
+                            <div style="background-color: #fffbeb; border-left: 5px solid #f59e0b; padding: 15px; border-radius: 6px; margin-bottom: 15px;">
+                                <p style="margin: 0 0 8px 0; font-size: 1.05rem; color: #92400e;"><b>⚠️ ATENÇÃO: Os preços da tabela base foram atualizados!</b></p>
+                                <p style="margin: 0; font-size: 0.95rem; color: #92400e;">
+                                    <b>Total Serviços:</b> de <s>{str(mrr_a).strip()}</s> ➡️ <b>{str(mrr_n).strip()}</b><br>
+                                    <b>Setup:</b> de <s>{str(setup_a).strip()}</s> ➡️ <b>{str(setup_n).strip()}</b>
+                                </p>
+                            </div>
+                            """, unsafe_allow_html=True)
+                            
                             if not st.checkbox("Estou ciente e avisarei o cliente.", key=f"chk_{p['idx_planilha']}"): pode_salvar = False
                         
                         c_b1, c_b2 = st.columns([3, 7])
@@ -480,7 +488,16 @@ def tela_principal():
                     pode_renovar = True
                     
                     if mrr_n != mrr_a or setup_n != setup_a:
-                        st.warning(f"⚠️ **ATENÇÃO:** Os preços sofrerão reajuste!\n\n**Total Serviços:** de {mrr_a} ➡️ **{mrr_n}**\n**Setup:** de {setup_a} ➡️ **{setup_n}**")
+                        st.markdown(f"""
+                        <div style="background-color: #fffbeb; border-left: 5px solid #f59e0b; padding: 15px; border-radius: 6px; margin-bottom: 15px;">
+                            <p style="margin: 0 0 8px 0; font-size: 1.05rem; color: #92400e;"><b>⚠️ ATENÇÃO: Os preços da tabela base foram atualizados!</b></p>
+                            <p style="margin: 0; font-size: 0.95rem; color: #92400e;">
+                                <b>Total Serviços:</b> de <s>{str(mrr_a).strip()}</s> ➡️ <b>{str(mrr_n).strip()}</b><br>
+                                <b>Setup:</b> de <s>{str(setup_a).strip()}</s> ➡️ <b>{str(setup_n).strip()}</b>
+                            </p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        
                         if not st.checkbox("Estou ciente e avisarei o cliente.", key="chk_manual"): pode_renovar = False
                     else: st.success("✅ Os valores continuam os mesmos da tabela atual.")
                         
@@ -1026,7 +1043,7 @@ def tela_principal():
                     itens_mo = df_produtos[df_produtos['Categoria_Receita'].fillna("").astype(str).str.lower().str.contains("obra|instala")]
                     with st.container(height=500):
                         if not itens_mo.empty:
-                            for index, linha in itens_iterrows(): desenhar_card_produto(index, linha)
+                            for index, linha in itens_mo.iterrows(): desenhar_card_produto(index, linha)
 
             with col_resumo:
                 bruto_alarme, bruto_imagem, bruto_produtos, total_mao_obra = 0.0, 0.0, 0.0, 0.0
