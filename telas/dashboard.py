@@ -313,7 +313,7 @@ def tela_principal():
         # Cálculos de Conversão
         total_leads = len(df_eq_leads)
         total_propostas = len(df_eq_prop)
-        df_aprovadas = df_eq_prop[df_eq_prop['Status_Proposta'] == 'Aprovada'].copy() if not df_eq_prop.empty else pd.DataFrame()
+        df_aprovadas = df_eq_prop[df_eq_prop['Status_Proposta'].astype(str).str.strip() == 'Aprovada'].copy() if not df_eq_prop.empty else pd.DataFrame()
         total_aprovadas = len(df_aprovadas)
         
         conv_lead = (total_aprovadas / total_leads * 100) if total_leads > 0 else 0.0
@@ -397,15 +397,38 @@ def tela_principal():
             st.markdown(f"<p style='text-align:right; margin-top:-10px; font-size:0.85rem; color:{'#10b981' if perc_setup>=100 else '#f59e0b'};'><b>{perc_setup:.1f}% Atingido</b></p>", unsafe_allow_html=True)
             
         st.divider()
-        cg1, cg2 = st.columns(2)
+        cg1, cg2, cg3 = st.columns(3)
         with cg1:
-            st.markdown("**Status do Funil de Negociações**")
+            st.markdown("**Status das Negociações**")
             if not df_eq_prop.empty: st.bar_chart(df_eq_prop['Status_Proposta'].value_counts())
             else: st.info("Sem dados")
         with cg2:
             st.markdown("**Volume do Pipeline**")
-            dados_funil = pd.DataFrame({"Etapa": ["1. Clientes Adicionados", "2. Propostas Enviadas", "3. Vendas Fechadas"], "Quantidade": [total_leads, total_propostas, total_aprovadas]}).set_index("Etapa")
+            dados_funil = pd.DataFrame({"Etapa": ["1. Adicionados", "2. Propostas", "3. Fechadas"], "Quantidade": [total_leads, total_propostas, total_aprovadas]}).set_index("Etapa")
             st.bar_chart(dados_funil)
+        with cg3:
+            st.markdown("**Motivos de Perdas**")
+            col_motivo = None
+            if not df_eq_prop.empty:
+                # Procura a coluna que contenha a palavra 'motivo' na planilha
+                for c in df_eq_prop.columns:
+                    if 'motivo' in c.lower():
+                        col_motivo = c
+                        break
+                if col_motivo:
+                    df_perdidas = df_eq_prop[df_eq_prop['Status_Proposta'].astype(str).str.strip() == 'Perdida']
+                    if not df_perdidas.empty:
+                        m_counts = df_perdidas[col_motivo].replace('', pd.NA).dropna().value_counts()
+                        if not m_counts.empty:
+                            st.bar_chart(m_counts)
+                        else:
+                            st.info("Sem motivos detalhados.")
+                    else:
+                        st.info("Nenhuma perda registrada.")
+                else:
+                    st.info("Coluna de motivo ausente.")
+            else:
+                st.info("Sem dados.")
             
         # --- RANKING DE VENDAS ---
         st.divider()
@@ -419,16 +442,30 @@ def tela_principal():
                 Receita_Setup=('Val_Setup', 'sum')
             ).reset_index()
 
-            # Mapear Unidade
+            # Mapear Unidade e Meta Proporcional Individual
             mapa_unidades = dict(zip(df_users['Email_C'], df_users['Unidade']))
             df_ranking['Unidade'] = df_ranking['Email_Vendedor'].apply(lambda e: str(mapa_unidades.get(e, '-')))
+            
+            mapa_meta_ind = {}
+            for _, u in df_users.iterrows():
+                email = str(u.get('Email_C', '')).strip()
+                vert = str(u.get('Vertical', '')).lower()
+                if 'varejo' in vert: m = float(cfg.get("Meta_Varejo_Receita_Vendedor", 1250))
+                elif 'condominio' in vert: m = float(cfg.get("Meta_Condominio_Receita_Vendedor", 2500))
+                else: m = float(cfg.get("Meta_Varejo_Receita_Vendedor", 1250))
+                mapa_meta_ind[email] = (m / 30) * dia_ref
+
+            df_ranking['Meta_Prop'] = df_ranking['Email_Vendedor'].map(mapa_meta_ind).fillna(1.0)
+            df_ranking['Perc_Ating'] = (df_ranking['Receita_Mensalidade'] / df_ranking['Meta_Prop']) * 100
 
             # Opções de Ordenação
             c_vazio_rank, c_sort_rank = st.columns([6, 4])
             with c_sort_rank:
                 sort_rank_opt = st.selectbox("Ordenar Ranking por:", [
                     "Mensalidade (Maior Valor)", "Mensalidade (Menor Valor)",
-                    "Setup (Maior Valor)", "Setup (Menor Valor)"
+                    "Setup (Maior Valor)", "Setup (Menor Valor)",
+                    "% Atingimento Mensalidade (Maior p/ Menor)",
+                    "% Atingimento Mensalidade (Menor p/ Maior)"
                 ], label_visibility="collapsed")
                 
             # Aplicar ordenação Matemática
@@ -440,14 +477,19 @@ def tela_principal():
                 df_ranking = df_ranking.sort_values(by='Receita_Setup', ascending=False)
             elif sort_rank_opt == "Setup (Menor Valor)":
                 df_ranking = df_ranking.sort_values(by='Receita_Setup', ascending=True)
+            elif sort_rank_opt == "% Atingimento Mensalidade (Maior p/ Menor)":
+                df_ranking = df_ranking.sort_values(by='Perc_Ating', ascending=False)
+            elif sort_rank_opt == "% Atingimento Mensalidade (Menor p/ Maior)":
+                df_ranking = df_ranking.sort_values(by='Perc_Ating', ascending=True)
 
             # Formatar para exibição após ordenar
             df_ranking['Receita Mensalidade'] = df_ranking['Receita_Mensalidade'].apply(lambda x: f"R$ {x:,.2f}".replace(",", "_").replace(".", ",").replace("_", "."))
             df_ranking['Receita Setup'] = df_ranking['Receita_Setup'].apply(lambda x: f"R$ {x:,.2f}".replace(",", "_").replace(".", ",").replace("_", "."))
+            df_ranking['% Atingimento (Mensalidade x Meta)'] = df_ranking['Perc_Ating'].apply(lambda x: f"{x:.1f}%")
             
             # Selecionar colunas finais e criar a posição 1º, 2º...
-            df_exibicao = df_ranking[['Vendedor', 'Unidade', 'Receita Mensalidade', 'Receita Setup']].reset_index(drop=True)
-            df_exibicao.index = df_exibicao.index + 1 # O index do dataframe agora servirá como o número da posição no ranking
+            df_exibicao = df_ranking[['Vendedor', 'Unidade', 'Receita Mensalidade', 'Receita Setup', '% Atingimento (Mensalidade x Meta)']].reset_index(drop=True)
+            df_exibicao.index = df_exibicao.index + 1 
             
             st.dataframe(df_exibicao, use_container_width=True)
         else:
@@ -611,7 +653,7 @@ def tela_principal():
                             faltam_t = limite_temp - (hoje - d_ref_t).days
                             txt_t = f"{faltam_t}d" if faltam_t >= 0 else "Venc"
                         except: txt_t = "-"
-                        tempo_faltante = f"P:{txt_p} | T:{txt_t}"
+                        tempo_faltante = f"Prop: {txt_p} | Temp: {txt_t}"
                     
                     cor_status = "🏆" if status == "Aprovada" else ("🟢" if status == "Em Negociação" else ("🔴" if status == "Perdida" else "⚫"))
                     
@@ -781,7 +823,6 @@ def tela_principal():
                         condicao_txt = f"{str(row.get('Parcelas', '1x'))} de {str(row.get('Valor_Parcela', 'R$ 0,00'))} ({str(row.get('Forma_Pagamento', 'Boleto'))})"
                         
                         html_prop = gerar_html_proposta(cliente, nome_prop, vendedor, itens_para_html, mrr, setup, condicao_txt)
-                        
                         docx_bytes, erro_docx = gerar_documento_contrato(lead_para_contrato, mrr, setup, condicao_txt, row.get('Itens_Orcamento', ''))
                         
                         opcoes_acao = ["Selecione...", "📄 PDF Proposta", "📄 PDF Contrato", "✍️ Assinar Zapsign"]
