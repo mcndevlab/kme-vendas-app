@@ -142,7 +142,8 @@ def aplicar_filtros_gerenciais(df_users, df_all_leads, df_all_prop, perfil, minh
             df_eq_p = df_eq_p[df_eq_p['Temperatura'].astype(str).str.strip() == filtro_temp]
 
     mapa_v = dict(zip(df_users['Email_C'], df_users['Nome']))
-    return df_eq_l, df_eq_p, mapa_v
+    dicionario_filtros = {"vertical": filtro_vert, "mes": filtro_mes, "dia": filtro_dia}
+    return df_eq_l, df_eq_p, mapa_v, dicionario_filtros
 
 def tela_principal():
     cfg = carregar_configuracoes()
@@ -273,6 +274,8 @@ def tela_principal():
         if perfil_acesso in ["Lider", "Gerente_Varejo", "Gerente_Condominio", "Diretoria"]:
             st.divider()
             st.caption("🔒 **Área Gerencial**")
+            # --- NOVO BOTÃO DE DASHBOARD ---
+            if st.button("📈 Dashboard", use_container_width=True): st.session_state.update({"etapa_atual": "dashboard", "proposta_idx_editando": None}); st.rerun()
             if st.button("📊 Funil da Equipe", use_container_width=True): st.session_state.update({"etapa_atual": "funil_equipe", "proposta_idx_editando": None}); st.rerun()
             if st.button("🗺️ Localização da Equipe", use_container_width=True): st.session_state.update({"etapa_atual": "mapa_equipe", "proposta_idx_editando": None}); st.rerun()
                 
@@ -298,13 +301,111 @@ def tela_principal():
     if st.session_state["msg_sucesso"] != "": st.success(st.session_state["msg_sucesso"]); st.session_state["msg_sucesso"] = ""
 
     # --- TELAS INTERNAS ---
-    if st.session_state["etapa_atual"] == "mapa_equipe":
+    if st.session_state["etapa_atual"] == "dashboard":
+        st.header("📈 Dashboard Gerencial")
+        df_users = carregar_usuarios()
+        df_users['Email_C'] = df_users['Email'].astype(str).str.strip().str.lower()
+        perfil, minha_unidade = st.session_state['perfil_usuario'], st.session_state['unidade_usuario'].lower()
+        
+        # Filtros Compartilhados
+        df_eq_leads, df_eq_prop, mapa_vendedores, sel_filtros = aplicar_filtros_gerenciais(df_users, carregar_todos_leads(), carregar_todas_propostas(), perfil, minha_unidade)
+        
+        # Cálculos de Conversão
+        total_leads = len(df_eq_leads)
+        total_propostas = len(df_eq_prop)
+        df_aprovadas = df_eq_prop[df_eq_prop['Status_Proposta'] == 'Aprovada'].copy() if not df_eq_prop.empty else pd.DataFrame()
+        total_aprovadas = len(df_aprovadas)
+        
+        conv_lead = (total_aprovadas / total_leads * 100) if total_leads > 0 else 0.0
+        conv_prop = (total_aprovadas / total_propostas * 100) if total_propostas > 0 else 0.0
+        
+        # Cálculos de Ticket Médio e Realizado
+        tm_mrr, tm_setup, realizado_mrr, realizado_setup = 0.0, 0.0, 0.0, 0.0
+        if not df_aprovadas.empty:
+            df_aprovadas['Val_MRR'] = df_aprovadas['Total_MRR'].apply(converter_para_numero)
+            df_aprovadas['Val_Setup'] = df_aprovadas['Total_Setup'].apply(converter_para_numero)
+            
+            tm_mrr = df_aprovadas['Val_MRR'].mean()
+            tm_setup = df_aprovadas['Val_Setup'].mean()
+            realizado_mrr = df_aprovadas['Val_MRR'].sum()
+            realizado_setup = df_aprovadas['Val_Setup'].sum()
+
+        st.markdown("#### 🎯 Conversão e Ticket Médio")
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Conversão (Lead ➡️ Venda)", f"{conv_lead:.1f}%", f"{total_aprovadas} de {total_leads} leads")
+        c2.metric("Conversão (Proposta ➡️ Venda)", f"{conv_prop:.1f}%", f"{total_aprovadas} de {total_propostas} props")
+        c3.metric("Ticket Médio (Mensalidade)", f"R$ {tm_mrr:,.2f}".replace(',','_').replace('.',',').replace('_','.'))
+        c4.metric("Ticket Médio (Setup)", f"R$ {tm_setup:,.2f}".replace(',','_').replace('.',',').replace('_','.'))
+
+        st.divider()
+
+        # Descobrir o dia de referência para proporcionalidade
+        dia_ref = datetime.datetime.now().day
+        if sel_filtros["dia"] != "Todos":
+            try: dia_ref = int(sel_filtros["dia"].split("/")[0])
+            except: pass
+        elif sel_filtros["mes"] != "Todos":
+            try:
+                mes_sel, ano_sel = sel_filtros["mes"].split("/")
+                hoje = datetime.datetime.now()
+                if int(mes_sel) != hoje.month or int(ano_sel) != hoje.year:
+                    dia_ref = 30 # Se for um mês fechado do passado, considera meta cheia de 30 dias
+            except: pass
+
+        # Cruzamento Inteligente das Metas dos Vendedores Filtrados
+        meta_total_mrr, meta_total_setup = 0.0, 0.0
+        if mapa_vendedores:
+            df_vendedores_filtrados = df_users[df_users['Email_C'].isin(mapa_vendedores.keys())]
+            for _, u in df_vendedores_filtrados.iterrows():
+                vert = str(u.get('Vertical', '')).lower()
+                if 'varejo' in vert:
+                    meta_total_mrr += float(cfg.get("Meta_Varejo_Receita_Vendedor", 1250))
+                    meta_total_setup += float(cfg.get("Meta_Varejo_Produtos_Vendedor", 5000))
+                elif 'condominio' in vert:
+                    meta_total_mrr += float(cfg.get("Meta_Condominio_Receita_Vendedor", 2500))
+                    meta_total_setup += float(cfg.get("Meta_Condominio_Produtos_Vendedor", 10000))
+                else: # Default
+                    meta_total_mrr += float(cfg.get("Meta_Varejo_Receita_Vendedor", 1250))
+                    meta_total_setup += float(cfg.get("Meta_Varejo_Produtos_Vendedor", 5000))
+        
+        meta_prop_mrr = (meta_total_mrr / 30) * dia_ref
+        meta_prop_setup = (meta_total_setup / 30) * dia_ref
+
+        st.markdown("#### 🚀 Desempenho Diário - Meta Acumulada x Realizado")
+        c_m1, c_m2 = st.columns(2)
+        
+        with c_m1:
+            perc_mrr = (realizado_mrr / meta_prop_mrr * 100) if meta_prop_mrr > 0 else 0.0
+            st.markdown(f"**Receita Recorrente (Mensalidade) - Dia {dia_ref}/30**")
+            st.caption(f"Meta Alvo Diária: R$ {meta_prop_mrr:,.2f} | Realizado: **R$ {realizado_mrr:,.2f}**")
+            st.progress(min(perc_mrr / 100, 1.0))
+            st.markdown(f"<p style='text-align:right; margin-top:-10px; font-size:0.85rem; color:{'#10b981' if perc_mrr>=100 else '#f59e0b'};'><b>{perc_mrr:.1f}% Atingido</b></p>", unsafe_allow_html=True)
+            
+        with c_m2:
+            perc_setup = (realizado_setup / meta_prop_setup * 100) if meta_prop_setup > 0 else 0.0
+            st.markdown(f"**Receita Imediata (Equip. + MO) - Dia {dia_ref}/30**")
+            st.caption(f"Meta Alvo Diária: R$ {meta_prop_setup:,.2f} | Realizado: **R$ {realizado_setup:,.2f}**")
+            st.progress(min(perc_setup / 100, 1.0))
+            st.markdown(f"<p style='text-align:right; margin-top:-10px; font-size:0.85rem; color:{'#10b981' if perc_setup>=100 else '#f59e0b'};'><b>{perc_setup:.1f}% Atingido</b></p>", unsafe_allow_html=True)
+            
+        st.divider()
+        cg1, cg2 = st.columns(2)
+        with cg1:
+            st.markdown("**Status do Funil de Negociações**")
+            if not df_eq_prop.empty: st.bar_chart(df_eq_prop['Status_Proposta'].value_counts())
+            else: st.info("Sem dados")
+        with cg2:
+            st.markdown("**Volume do Pipeline**")
+            dados_funil = pd.DataFrame({"Etapa": ["1. Clientes Adicionados", "2. Propostas Enviadas", "3. Vendas Fechadas"], "Quantidade": [total_leads, total_propostas, total_aprovadas]}).set_index("Etapa")
+            st.bar_chart(dados_funil)
+
+    elif st.session_state["etapa_atual"] == "mapa_equipe":
         st.header("🗺️ Localização da Equipe")
         df_users = carregar_usuarios()
         df_users['Email_C'] = df_users['Email'].astype(str).str.strip().str.lower()
         perfil, minha_unidade = st.session_state['perfil_usuario'], st.session_state['unidade_usuario'].lower()
         
-        df_eq_l, _, _ = aplicar_filtros_gerenciais(df_users, carregar_todos_leads(), carregar_todas_propostas(), perfil, minha_unidade)
+        df_eq_l, _, _, _ = aplicar_filtros_gerenciais(df_users, carregar_todos_leads(), carregar_todas_propostas(), perfil, minha_unidade)
         
         st.write("---")
         df_mapa = df_eq_l.copy()
@@ -336,7 +437,7 @@ def tela_principal():
         df_users['Email_C'] = df_users['Email'].astype(str).str.strip().str.lower()
         perfil, minha_unidade = st.session_state['perfil_usuario'], st.session_state['unidade_usuario'].lower()
         
-        df_eq_leads, df_eq_prop, mapa_vendedores = aplicar_filtros_gerenciais(df_users, carregar_todos_leads(), carregar_todas_propostas(), perfil, minha_unidade)
+        df_eq_leads, df_eq_prop, mapa_vendedores, _ = aplicar_filtros_gerenciais(df_users, carregar_todos_leads(), carregar_todas_propostas(), perfil, minha_unidade)
         
         st.write("---")
         aba_leads, aba_prop = st.tabs(["📋 Clientes da Equipe", "💼 Propostas da Equipe"])
@@ -581,12 +682,8 @@ def tela_principal():
                     cliente, nome_prop = str(row.get('Nome_Cliente', '')), str(row.get('Nome_Proposta', 'Principal'))
                     status, mrr, setup = str(row.get('Status_Proposta', 'Em Negociação')).strip() or "Em Negociação", str(row.get('Total_MRR', '')), str(row.get('Total_Setup', ''))
                     temperatura = str(row.get('Temperatura', 'Morno 🌤️')).split(" ")[0]
-                    
-                    prop_renovada = str(row.get('Data_Proposta_Renovada', '')).replace('nan', '').replace('None', '').strip()
-                    data_ref_prop_str = prop_renovada if prop_renovada else str(row.get('Data_Proposta', '')).replace('nan', '').replace('None', '').strip()
-                    
-                    temp_renovada = str(row.get('Data_Temperatura_Renovada', '')).replace('nan', '').replace('None', '').strip()
-                    data_ref_temp_str = temp_renovada if temp_renovada else str(row.get('Data_Proposta', '')).replace('nan', '').replace('None', '').strip()
+                    data_ref_prop_str = str(row.get('Data_Proposta_Renovada', '')).strip() or str(row.get('Data_Proposta', '')).strip()
+                    data_ref_temp_str = str(row.get('Data_Temperatura_Renovada', '')).strip() or str(row.get('Data_Proposta', '')).strip()
                     vendedor = str(row.get('Nome_Usuario', ''))
                     
                     tempo_faltante = "-"
@@ -630,7 +727,6 @@ def tela_principal():
                         condicao_txt = f"{str(row.get('Parcelas', '1x'))} de {str(row.get('Valor_Parcela', 'R$ 0,00'))} ({str(row.get('Forma_Pagamento', 'Boleto'))})"
                         
                         html_prop = gerar_html_proposta(cliente, nome_prop, vendedor, itens_para_html, mrr, setup, condicao_txt)
-                        
                         docx_bytes, erro_docx = gerar_documento_contrato(lead_para_contrato, mrr, setup, condicao_txt, row.get('Itens_Orcamento', ''))
                         
                         opcoes_acao = ["Selecione...", "📄 PDF Proposta", "📄 PDF Contrato", "✍️ Assinar Zapsign"]
@@ -1263,7 +1359,7 @@ def tela_principal():
                 st.write("---")
                 st.write("### 📝 Apresentação Final para o Cliente")
                 col_sel1, col_sel2 = st.columns([4, 6])
-                with col_sel1: parcela_escolhida = st.selectbox("Selecione a condição fechada com o cliente:", range(1, limite_parcelas + 1), format_func=lambda x: f"{x}x parcela(s)")
+                with col_sel1: parcela_escolhida = st.selectbox("Selecione a condition fechada com o cliente:", range(1, limite_parcelas + 1), format_func=lambda x: f"{x}x parcela(s)")
                 txt_parcela, forma_limpa, mrr_formatado = dados_tabela[parcela_escolhida - 1]["Valor Parcela"], forma_pagamento.split(' ')[0], f"R$ {total_mensal:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
                 
                 st.markdown(f"""
