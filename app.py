@@ -1,8 +1,10 @@
+
+registrar_atividade(st.session_state["email_usuario"])
 import streamlit as st
 from telas.login import tela_login, tela_trocar_senha
 from telas.dashboard import tela_principal
 
-registrar_atividade(st.session_state["email_usuario"])
+
 
 # 1. Configuração da página (Ícone com a Logo e Menu Lateral forçado para iniciar aberto)
 st.set_page_config(
