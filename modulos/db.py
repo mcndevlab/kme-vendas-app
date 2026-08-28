@@ -79,7 +79,7 @@ def carregar_configuracoes():
     except: pass
     return config_dict
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=300) # Mantive o ttl=300 (5min), mas lembre-se que para tempo real talvez precise diminuir!
 def carregar_usuarios():
     try: 
         res = conectar_banco().table("Usuarios").select("*").execute()
@@ -316,4 +316,14 @@ def efetivar_aprovacao(row_index_planilha):
         return True
     except Exception as err:
         st.error(f"❌ Erro Supabase ao aprovar proposta: {err}")
+        return False
+
+# --- NOVA FUNÇÃO DE SINAL DE VIDA ---
+def registrar_atividade(email_usuario):
+    try:
+        agora = obter_data_hora_brasil()
+        conectar_banco().table("Usuarios").update({"Ultimo_Acesso": agora}).eq("Email", email_usuario).execute()
+        return True
+    except Exception as e:
+        # Pass silenciado para não interromper a navegação do vendedor caso o banco pisque
         return False
