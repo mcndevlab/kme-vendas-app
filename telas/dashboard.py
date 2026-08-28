@@ -271,10 +271,9 @@ def tela_principal():
         if st.button("💼 Minhas Propostas", use_container_width=True): st.session_state.update({"etapa_atual": "minhas_propostas", "proposta_idx_editando": None}); st.rerun()
             
         perfil_acesso = str(st.session_state.get('perfil_usuario', '')).strip()
-        if perfil_acesso in ["Lider", "Gerente_Varejo", "Gerente_Condominio", "Diretoria"]:
+        if perfil_acesso in ["Lider", "Gerente_Varejo", "Gerente_Condominio", "Diretoria", "Gerente_Unidade"]:
             st.divider()
             st.caption("🔒 **Área Gerencial**")
-            # --- NOVO BOTÃO DE DASHBOARD ---
             if st.button("📈 Dashboard", use_container_width=True): st.session_state.update({"etapa_atual": "dashboard", "proposta_idx_editando": None}); st.rerun()
             if st.button("📊 Funil da Equipe", use_container_width=True): st.session_state.update({"etapa_atual": "funil_equipe", "proposta_idx_editando": None}); st.rerun()
             if st.button("🗺️ Localização da Equipe", use_container_width=True): st.session_state.update({"etapa_atual": "mapa_equipe", "proposta_idx_editando": None}); st.rerun()
@@ -410,7 +409,6 @@ def tela_principal():
             st.markdown("**Motivos de Perdas**")
             col_motivo = None
             if not df_eq_prop.empty:
-                # Procura a coluna que contenha a palavra 'motivo' na planilha
                 for c in df_eq_prop.columns:
                     if 'motivo' in c.lower():
                         col_motivo = c
@@ -435,14 +433,12 @@ def tela_principal():
         st.markdown("#### 🏆 Ranking de Vendas da Equipe (Aprovadas)")
         
         if not df_aprovadas.empty:
-            # Agrupar os dados dos vendedores
             df_ranking = df_aprovadas.groupby('Email_Vendedor').agg(
                 Vendedor=('Nome_Usuario', 'first'),
                 Receita_Mensalidade=('Val_MRR', 'sum'),
                 Receita_Setup=('Val_Setup', 'sum')
             ).reset_index()
 
-            # Mapear Unidade e Meta Proporcional Individual
             mapa_unidades = dict(zip(df_users['Email_C'], df_users['Unidade']))
             df_ranking['Unidade'] = df_ranking['Email_Vendedor'].apply(lambda e: str(mapa_unidades.get(e, '-')))
             
@@ -458,7 +454,6 @@ def tela_principal():
             df_ranking['Meta_Prop'] = df_ranking['Email_Vendedor'].map(mapa_meta_ind).fillna(1.0)
             df_ranking['Perc_Ating'] = (df_ranking['Receita_Mensalidade'] / df_ranking['Meta_Prop']) * 100
 
-            # Opções de Ordenação
             c_vazio_rank, c_sort_rank = st.columns([6, 4])
             with c_sort_rank:
                 sort_rank_opt = st.selectbox("Ordenar Ranking por:", [
@@ -468,32 +463,72 @@ def tela_principal():
                     "% Atingimento Mensalidade (Menor p/ Maior)"
                 ], label_visibility="collapsed")
                 
-            # Aplicar ordenação Matemática
-            if sort_rank_opt == "Mensalidade (Maior Valor)":
-                df_ranking = df_ranking.sort_values(by='Receita_Mensalidade', ascending=False)
-            elif sort_rank_opt == "Mensalidade (Menor Valor)":
-                df_ranking = df_ranking.sort_values(by='Receita_Mensalidade', ascending=True)
-            elif sort_rank_opt == "Setup (Maior Valor)":
-                df_ranking = df_ranking.sort_values(by='Receita_Setup', ascending=False)
-            elif sort_rank_opt == "Setup (Menor Valor)":
-                df_ranking = df_ranking.sort_values(by='Receita_Setup', ascending=True)
-            elif sort_rank_opt == "% Atingimento Mensalidade (Maior p/ Menor)":
-                df_ranking = df_ranking.sort_values(by='Perc_Ating', ascending=False)
-            elif sort_rank_opt == "% Atingimento Mensalidade (Menor p/ Maior)":
-                df_ranking = df_ranking.sort_values(by='Perc_Ating', ascending=True)
+            if sort_rank_opt == "Mensalidade (Maior Valor)": df_ranking = df_ranking.sort_values(by='Receita_Mensalidade', ascending=False)
+            elif sort_rank_opt == "Mensalidade (Menor Valor)": df_ranking = df_ranking.sort_values(by='Receita_Mensalidade', ascending=True)
+            elif sort_rank_opt == "Setup (Maior Valor)": df_ranking = df_ranking.sort_values(by='Receita_Setup', ascending=False)
+            elif sort_rank_opt == "Setup (Menor Valor)": df_ranking = df_ranking.sort_values(by='Receita_Setup', ascending=True)
+            elif sort_rank_opt == "% Atingimento Mensalidade (Maior p/ Menor)": df_ranking = df_ranking.sort_values(by='Perc_Ating', ascending=False)
+            elif sort_rank_opt == "% Atingimento Mensalidade (Menor p/ Maior)": df_ranking = df_ranking.sort_values(by='Perc_Ating', ascending=True)
 
-            # Formatar para exibição após ordenar
             df_ranking['Receita Mensalidade'] = df_ranking['Receita_Mensalidade'].apply(lambda x: f"R$ {x:,.2f}".replace(",", "_").replace(".", ",").replace("_", "."))
             df_ranking['Receita Setup'] = df_ranking['Receita_Setup'].apply(lambda x: f"R$ {x:,.2f}".replace(",", "_").replace(".", ",").replace("_", "."))
             df_ranking['% Atingimento (Mensalidade x Meta)'] = df_ranking['Perc_Ating'].apply(lambda x: f"{x:.1f}%")
             
-            # Selecionar colunas finais e criar a posição 1º, 2º...
             df_exibicao = df_ranking[['Vendedor', 'Unidade', 'Receita Mensalidade', 'Receita Setup', '% Atingimento (Mensalidade x Meta)']].reset_index(drop=True)
             df_exibicao.index = df_exibicao.index + 1 
             
             st.dataframe(df_exibicao, use_container_width=True)
         else:
             st.info("Nenhuma venda fechada no período selecionado para gerar o ranking.")
+
+        # --- SINAL DE VIDA DA EQUIPE (INATIVIDADE) ---
+        st.divider()
+        st.markdown("#### 📡 Monitor de Atividade da Equipe")
+        st.caption("Visão em tempo real baseada no último clique de cada consultor da sua base filtrada (Horário Comercial).")
+        
+        df_equipe_vida = df_users[df_users['Email_C'].isin(mapa_vendedores.keys())].copy()
+        
+        if not df_equipe_vida.empty:
+            dados_vida = []
+            fuso_br = datetime.timezone(datetime.timedelta(hours=-3))
+            agora_dt = datetime.datetime.now(fuso_br)
+            
+            for _, u in df_equipe_vida.iterrows():
+                nome_u = str(u.get('Nome', 'Desconhecido'))
+                unidade_u = str(u.get('Unidade', '-'))
+                ultimo_acesso_str = str(u.get('Ultimo_Acesso', '')).strip()
+                
+                status_vida = "⚪ Nunca acessou"
+                
+                if ultimo_acesso_str and ultimo_acesso_str.lower() != 'nan':
+                    try:
+                        dt_acesso = datetime.datetime.strptime(ultimo_acesso_str, "%d/%m/%Y %H:%M:%S")
+                        dt_acesso = dt_acesso.replace(tzinfo=fuso_br)
+                        
+                        diff_horas = (agora_dt - dt_acesso).total_seconds() / 3600
+                        
+                        if diff_horas > 4:
+                            status_vida = f"🔴 Inativo há {int(diff_horas)}h"
+                        else:
+                            if diff_horas < 1:
+                                status_vida = "🟢 Ativo agora"
+                            else:
+                                status_vida = f"🟡 Inativo há {int(diff_horas)}h"
+                    except:
+                        status_vida = "⚪ Data inválida"
+                        
+                dados_vida.append({
+                    "Consultor": nome_u,
+                    "Unidade": unidade_u,
+                    "Último Acesso Registrado": ultimo_acesso_str if ultimo_acesso_str and ultimo_acesso_str.lower() != 'nan' else "-",
+                    "Status em Tempo Real": status_vida
+                })
+                
+            df_vida = pd.DataFrame(dados_vida)
+            st.dataframe(df_vida, use_container_width=True, hide_index=True)
+        else:
+            st.info("Nenhum consultor encontrado para os filtros atuais.")
+
 
     elif st.session_state["etapa_atual"] == "mapa_equipe":
         st.header("🗺️ Localização da Equipe")
@@ -653,7 +688,7 @@ def tela_principal():
                             faltam_t = limite_temp - (hoje - d_ref_t).days
                             txt_t = f"{faltam_t}d" if faltam_t >= 0 else "Venc"
                         except: txt_t = "-"
-                        tempo_faltante = f"Prop: {txt_p} | Temp: {txt_t}"
+                        tempo_faltante = f"P:{txt_p} | T:{txt_t}"
                     
                     cor_status = "🏆" if status == "Aprovada" else ("🟢" if status == "Em Negociação" else ("🔴" if status == "Perdida" else "⚫"))
                     
@@ -778,8 +813,12 @@ def tela_principal():
                     cliente, nome_prop = str(row.get('Nome_Cliente', '')), str(row.get('Nome_Proposta', 'Principal'))
                     status, mrr, setup = str(row.get('Status_Proposta', 'Em Negociação')).strip() or "Em Negociação", str(row.get('Total_MRR', '')), str(row.get('Total_Setup', ''))
                     temperatura = str(row.get('Temperatura', 'Morno 🌤️')).split(" ")[0]
-                    data_ref_prop_str = str(row.get('Data_Proposta_Renovada', '')).strip() or str(row.get('Data_Proposta', '')).strip()
-                    data_ref_temp_str = str(row.get('Data_Temperatura_Renovada', '')).strip() or str(row.get('Data_Proposta', '')).strip()
+                    
+                    prop_renovada = str(row.get('Data_Proposta_Renovada', '')).replace('nan', '').replace('None', '').strip()
+                    data_ref_prop_str = prop_renovada if prop_renovada else str(row.get('Data_Proposta', '')).replace('nan', '').replace('None', '').strip()
+                    
+                    temp_renovada = str(row.get('Data_Temperatura_Renovada', '')).replace('nan', '').replace('None', '').strip()
+                    data_ref_temp_str = temp_renovada if temp_renovada else str(row.get('Data_Proposta', '')).replace('nan', '').replace('None', '').strip()
                     vendedor = str(row.get('Nome_Usuario', ''))
                     
                     tempo_faltante = "-"
@@ -823,6 +862,7 @@ def tela_principal():
                         condicao_txt = f"{str(row.get('Parcelas', '1x'))} de {str(row.get('Valor_Parcela', 'R$ 0,00'))} ({str(row.get('Forma_Pagamento', 'Boleto'))})"
                         
                         html_prop = gerar_html_proposta(cliente, nome_prop, vendedor, itens_para_html, mrr, setup, condicao_txt)
+                        
                         docx_bytes, erro_docx = gerar_documento_contrato(lead_para_contrato, mrr, setup, condicao_txt, row.get('Itens_Orcamento', ''))
                         
                         opcoes_acao = ["Selecione...", "📄 PDF Proposta", "📄 PDF Contrato", "✍️ Assinar Zapsign"]
