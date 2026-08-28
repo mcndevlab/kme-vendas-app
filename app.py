@@ -3,7 +3,9 @@ from telas.login import tela_login, tela_trocar_senha
 from telas.dashboard import tela_principal
 from modulos.db import (carregar_usuarios, registrar_atividade)
 
-registrar_atividade(st.session_state["email_usuario"])
+# Só registra a atividade se o usuário já estiver logado no sistema
+if st.session_state.get("email_usuario"):
+    registrar_atividade(st.session_state["email_usuario"])
 
 # 1. Configuração da página (Ícone com a Logo e Menu Lateral forçado para iniciar aberto)
 st.set_page_config(
