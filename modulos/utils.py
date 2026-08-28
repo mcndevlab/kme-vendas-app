@@ -196,16 +196,23 @@ def calcular_novos_valores_proposta(row_data, df_produtos, df_valor_sensor):
 
 def obter_emails_gestores(df_users, unidade_user, vertical_user):
     emails = []
-    lideres = df_users[(df_users['Perfil'].astype(str).str.strip() == 'Lider') & (df_users['Unidade'].astype(str).str.strip().str.lower() == str(unidade_user).strip().lower())]
-    emails.extend(lideres['Email_C'].tolist())
     
+    # 1. Busca Líderes e Gerentes da MESMA Unidade do vendedor
+    gestores_unidade = df_users[
+        (df_users['Perfil'].astype(str).str.strip().isin(['Lider', 'Gerente_Unidade'])) & 
+        (df_users['Unidade'].astype(str).str.strip().str.lower() == str(unidade_user).strip().lower())
+    ]
+    emails.extend(gestores_unidade['Email_C'].tolist())
+    
+    # 2. Busca o Gerente Nacional da Vertical (Varejo ou Condomínio)
     if "varejo" in str(vertical_user).lower():
-        gerentes = df_users[df_users['Perfil'].astype(str).str.strip() == 'Gerente_Varejo']
-        emails.extend(gerentes['Email_C'].tolist())
+        gerentes_v = df_users[df_users['Perfil'].astype(str).str.strip() == 'Gerente_Varejo']
+        emails.extend(gerentes_v['Email_C'].tolist())
     elif "condominio" in str(vertical_user).lower():
-        gerentes = df_users[df_users['Perfil'].astype(str).str.strip() == 'Gerente_Condominio']
-        emails.extend(gerentes['Email_C'].tolist())
+        gerentes_v = df_users[df_users['Perfil'].astype(str).str.strip() == 'Gerente_Condominio']
+        emails.extend(gerentes_v['Email_C'].tolist())
         
+    # O 'set' no final garante que, se alguém tiver dois cargos, não receba o e-mail duplicado
     return list(set(emails))
 
 def enviar_email_aprovacao(nome_consultor, unidade, vertical, valor_mrr, valor_equip, valor_mo, emails_destino):
