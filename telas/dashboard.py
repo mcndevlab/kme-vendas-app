@@ -14,7 +14,8 @@ from modulos.db import (carregar_produtos, carregar_valores_sensores, carregar_v
                         carregar_todos_leads, carregar_todas_propostas, carregar_meus_leads,
                         carregar_minhas_propostas, salvar_lead, atualizar_lead, salvar_proposta,
                         atualizar_proposta_modificada, efetivar_renovacao, efetivar_atualizacao_temperatura,
-                        efetivar_perda, efetivar_aprovacao)
+                        efetivar_perda, efetivar_aprovacao, 
+                        carregar_tabela_configuracoes, atualizar_valor_configuracao) # IMPORTAÇÕES NOVAS
 
 from modulos.utils import (padronizar_nome, padronizar_telefone, extrair_tabela_crm_itens,
                            validar_inconsistencias_carrinho, calcular_novos_valores_proposta,
@@ -261,6 +262,17 @@ def tela_principal():
                 st.divider()
         st.stop() 
 
+    # --- VERIFICAÇÃO SE O USUÁRIO É ADMINISTRADOR ---
+    df_users_chk = carregar_usuarios()
+    is_admin = False
+    if not df_users_chk.empty and 'Perfil_Acesso' in df_users_chk.columns:
+        # Busca o usuário logado na tabela
+        user_info = df_users_chk[df_users_chk['Email'].astype(str).str.lower().str.strip() == st.session_state['email_usuario'].lower().strip()]
+        if not user_info.empty:
+            perfil_acc = str(user_info.iloc[0].get('Perfil_Acesso', '')).strip().lower()
+            if perfil_acc == 'administrador':
+                is_admin = True
+
     with st.sidebar:
         if os.path.exists("logo.jpg"): st.image("logo.jpg", width=120)
         st.markdown("### **Khronos Sales**")
@@ -277,6 +289,14 @@ def tela_principal():
             if st.button("📈 Dashboard", use_container_width=True): st.session_state.update({"etapa_atual": "dashboard", "proposta_idx_editando": None}); st.rerun()
             if st.button("📊 Funil da Equipe", use_container_width=True): st.session_state.update({"etapa_atual": "funil_equipe", "proposta_idx_editando": None}); st.rerun()
             if st.button("🗺️ Localização da Equipe", use_container_width=True): st.session_state.update({"etapa_atual": "mapa_equipe", "proposta_idx_editando": None}); st.rerun()
+        
+        # --- MENU EXCLUSIVO PARA ADMINISTRADOR ---
+        if is_admin:
+            st.divider()
+            st.caption("🛠️ **Administração**")
+            if st.button("⚙️ Painel de Controle", use_container_width=True): 
+                st.session_state.update({"etapa_atual": "painel_controle", "proposta_idx_editando": None})
+                st.rerun()
                 
         st.divider()
         if st.session_state["lead_dados"].get("nome"):
@@ -300,16 +320,67 @@ def tela_principal():
     if st.session_state["msg_sucesso"] != "": st.success(st.session_state["msg_sucesso"]); st.session_state["msg_sucesso"] = ""
 
     # --- TELAS INTERNAS ---
-    if st.session_state["etapa_atual"] == "dashboard":
+    
+    # --- NOVA TELA: PAINEL DE CONTROLE ---
+    if st.session_state["etapa_atual"] == "painel_controle":
+        st.header("⚙️ Painel de Controle")
+        st.caption("Área exclusiva para Gestão Técnica e Configurações do Sistema.")
+        
+        aba_config, aba_usuarios = st.tabs(["🛠️ Configurações Gerais", "🔒 Em Breve..."])
+        
+        with aba_config:
+            st.markdown("#### Tabela de Configurações")
+            st.write("Altere os valores dos parâmetros abaixo e clique no botão verde no fim da página para atualizar o banco de dados em tempo real.")
+            
+            df_configs = carregar_tabela_configuracoes()
+            
+            if df_configs.empty:
+                st.info("Nenhuma configuração encontrada na tabela 'Configuracoes'.")
+            else:
+                # Descobre o nome exato da coluna Descrição (com ou sem acento)
+                col_desc = 'Descricao' if 'Descricao' in df_configs.columns else ('Descrição' if 'Descrição' in df_configs.columns else None)
+                
+                with st.form("form_configs"):
+                    novos_valores = {}
+                    
+                    for idx, row in df_configs.iterrows():
+                        param = str(row.get('Parametro', ''))
+                        val = str(row.get('Valor', ''))
+                        desc = str(row[col_desc]) if col_desc and not pd.isna(row.get(col_desc)) else ""
+                        
+                        st.markdown(f"**{param}**")
+                        if desc and desc.lower() != 'nan':
+                            st.caption(desc)
+                        
+                        novos_valores[param] = st.text_input("Valor", value=val, key=f"conf_{param}", label_visibility="collapsed")
+                        st.write("---")
+                        
+                    col_submit, _ = st.columns([3, 7])
+                    if col_submit.form_submit_button("💾 Salvar Alterações", type="primary", use_container_width=True):
+                        sucesso_geral = True
+                        
+                        for p, v in novos_valores.items():
+                            val_antigo = str(df_configs[df_configs['Parametro'] == p]['Valor'].values[0])
+                            # Só manda requisição pro banco se o valor realmente mudou
+                            if v != val_antigo:
+                                if not atualizar_valor_configuracao(p, v):
+                                    sucesso_geral = False
+                        
+                        if sucesso_geral:
+                            st.success("✅ Configurações atualizadas no Supabase com sucesso!")
+                            st.cache_data.clear() # Limpa o cache para recarregar as novas regras de juros/prazos
+                            st.rerun()
+                        else:
+                            st.error("⚠️ Ocorreu um erro ao atualizar algumas configurações.")
+
+    elif st.session_state["etapa_atual"] == "dashboard":
         st.header("📈 Dashboard Gerencial")
         df_users = carregar_usuarios()
         df_users['Email_C'] = df_users['Email'].astype(str).str.strip().str.lower()
         perfil, minha_unidade = st.session_state['perfil_usuario'], st.session_state['unidade_usuario'].lower()
         
-        # Filtros Compartilhados
         df_eq_leads, df_eq_prop, mapa_vendedores, sel_filtros = aplicar_filtros_gerenciais(df_users, carregar_todos_leads(), carregar_todas_propostas(), perfil, minha_unidade)
         
-        # Cálculos de Conversão
         total_leads = len(df_eq_leads)
         total_propostas = len(df_eq_prop)
         df_aprovadas = df_eq_prop[df_eq_prop['Status_Proposta'].astype(str).str.strip() == 'Aprovada'].copy() if not df_eq_prop.empty else pd.DataFrame()
@@ -318,7 +389,6 @@ def tela_principal():
         conv_lead = (total_aprovadas / total_leads * 100) if total_leads > 0 else 0.0
         conv_prop = (total_aprovadas / total_propostas * 100) if total_propostas > 0 else 0.0
         
-        # Cálculos de Ticket Médio e Realizado
         tm_mrr, tm_setup, realizado_mrr, realizado_setup = 0.0, 0.0, 0.0, 0.0
         if not df_aprovadas.empty:
             df_aprovadas['Val_MRR'] = df_aprovadas['Total_MRR'].apply(converter_para_numero)
@@ -338,7 +408,6 @@ def tela_principal():
 
         st.divider()
 
-        # Descobrir o dia de referência para proporcionalidade
         dia_ref = datetime.datetime.now().day
         if sel_filtros["dia"] != "Todos":
             try: dia_ref = int(sel_filtros["dia"].split("/")[0])
@@ -348,10 +417,9 @@ def tela_principal():
                 mes_sel, ano_sel = sel_filtros["mes"].split("/")
                 hoje = datetime.datetime.now()
                 if int(mes_sel) != hoje.month or int(ano_sel) != hoje.year:
-                    dia_ref = 30 # Se for um mês fechado do passado, considera meta cheia de 30 dias
+                    dia_ref = 30 
             except: pass
 
-        # Cruzamento Inteligente das Metas dos Vendedores Filtrados
         meta_total_mrr, meta_total_setup = 0.0, 0.0
         if mapa_vendedores:
             df_vendedores_filtrados = df_users[df_users['Email_C'].isin(mapa_vendedores.keys())]
@@ -363,7 +431,7 @@ def tela_principal():
                 elif 'condominio' in vert:
                     meta_total_mrr += float(cfg.get("Meta_Condominio_Receita_Vendedor", 2500))
                     meta_total_setup += float(cfg.get("Meta_Condominio_Produtos_Vendedor", 10000))
-                else: # Default
+                else: 
                     meta_total_mrr += float(cfg.get("Meta_Varejo_Receita_Vendedor", 1250))
                     meta_total_setup += float(cfg.get("Meta_Varejo_Produtos_Vendedor", 5000))
         
