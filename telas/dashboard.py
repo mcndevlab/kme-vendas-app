@@ -403,8 +403,7 @@ def tela_principal():
                         else:
                             dados_novo = {
                                 "Nome": novo_nome, 
-                                "Email": novo_email, 
-                                "Email_C": str(novo_email).lower().strip(),
+                                "Email": str(novo_email).lower().strip(), # Salva formatado direto na coluna original
                                 "Senha": nova_senha, 
                                 "Perfil": novo_perfil, 
                                 "Unidade": nova_unidade,
@@ -465,8 +464,7 @@ def tela_principal():
                                 else:
                                     dados_update = {
                                         "Nome": ed_nome, 
-                                        "Email": ed_email, 
-                                        "Email_C": str(ed_email).lower().strip(),
+                                        "Email": str(ed_email).lower().strip(), 
                                         "Senha": ed_senha, 
                                         "Perfil": ed_perfil, 
                                         "Unidade": ed_unidade,
