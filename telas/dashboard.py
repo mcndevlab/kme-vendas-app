@@ -424,32 +424,43 @@ def tela_principal():
                 if df_all_users.empty:
                     st.info("Nenhum usuário localizado no banco de dados.")
                 else:
-                    # --- MÁGICA AQUI: Criando o mapa Nome (Email) ---
+                    # --- MÁGICA AQUI: Criando o mapa seguro e limpando o (nan) ---
                     opcoes_exibicao = []
                     mapa_usuarios = {}
-                    for _, u in df_all_users.iterrows():
+                    
+                    for idx, u in df_all_users.iterrows():
                         nome_exib = str(u.get('Nome', 'Sem Nome')).strip()
                         email_exib = str(u.get('Email', '')).strip()
-                        if email_exib:
-                            txt_opcao = f"{nome_exib} ({email_exib})"
-                            opcoes_exibicao.append(txt_opcao)
-                            mapa_usuarios[txt_opcao] = email_exib # Guarda o e-mail real como chave
+                        
+                        # Limpa o (nan) e deixa elegante
+                        if email_exib.lower() == 'nan' or not email_exib:
+                            email_exib = "Sem Email cadastrado"
+                            
+                        # Cria o texto visual e vincula ao índice exato da tabela (idx)
+                        txt_opcao = f"{nome_exib} ({email_exib}) - ID: {u.get('id', idx)}"
+                        opcoes_exibicao.append(txt_opcao)
+                        mapa_usuarios[txt_opcao] = idx
                             
                     opcoes_exibicao = sorted(opcoes_exibicao)
                     
                     user_selecionado_txt = st.selectbox("Selecione o usuário para editar:", ["Selecione..."] + opcoes_exibicao)
                     
                     if user_selecionado_txt != "Selecione...":
-                        email_real = mapa_usuarios[user_selecionado_txt] # Resgata o email por trás do nome
-                        user_data = df_all_users[df_all_users['Email'] == email_real].iloc[0]
+                        # Resgata a linha exata usando o índice seguro
+                        idx_real = mapa_usuarios[user_selecionado_txt]
+                        user_data = df_all_users.loc[idx_real]
+                        
+                        id_usuario = user_data.get('id')
+                        email_original = str(user_data.get('Email', '')).strip()
+                        if email_original.lower() == 'nan': email_original = ""
                         
                         with st.form("form_edit_user"):
                             c1, c2 = st.columns(2)
-                            ed_nome = c1.text_input("Nome Completo *", value=str(user_data.get('Nome', '')))
-                            ed_email = c2.text_input("E-mail (Login) *", value=str(user_data.get('Email', '')))
+                            ed_nome = c1.text_input("Nome Completo *", value=str(user_data.get('Nome', '')).replace('nan',''))
+                            ed_email = c2.text_input("E-mail (Login) *", value=email_original)
                             
                             c3, c4 = st.columns(2)
-                            ed_senha = c3.text_input("Senha *", value=str(user_data.get('Senha', '')))
+                            ed_senha = c3.text_input("Senha *", value=str(user_data.get('Senha', '')).replace('nan',''))
                             
                             opcoes_status = ["Ativo", "Inativo"]
                             idx_status = opcoes_status.index(user_data.get('Status', 'Ativo')) if user_data.get('Status', 'Ativo') in opcoes_status else 0
@@ -486,7 +497,9 @@ def tela_principal():
                                         "Login_CRM": ed_login_crm,
                                         "Perfil_Acesso": ed_perfil_acesso
                                     }
-                                    suc, msg = atualizar_usuario_banco(email_real, dados_update) # Usa o email original para a busca
+                                    
+                                    # Passa o ID e o email original para garantir a edição exata
+                                    suc, msg = atualizar_usuario_banco(id_usuario, email_original, dados_update)
                                     if suc:
                                         st.success(msg)
                                         st.cache_data.clear()
