@@ -352,9 +352,14 @@ def adicionar_usuario_banco(dados):
     except Exception as e:
         return False, f"Erro Supabase: {e}"
 
-def atualizar_usuario_banco(email_original, dados):
+def atualizar_usuario_banco(id_usuario, email_original, dados):
     try:
-        conectar_banco().table("Usuarios").update(dados).eq("Email", email_original).execute()
+        # Tenta atualizar com segurança máxima pelo ID único da linha
+        if id_usuario and str(id_usuario).lower() != 'nan':
+            conectar_banco().table("Usuarios").update(dados).eq("id", int(id_usuario)).execute()
+        # Fallback de segurança: se a tabela não tiver ID, usa o e-mail
+        else:
+            conectar_banco().table("Usuarios").update(dados).eq("Email", email_original).execute()
         return True, "Usuário atualizado com sucesso!"
     except Exception as e:
         return False, f"Erro Supabase: {e}"
