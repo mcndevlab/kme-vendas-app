@@ -21,7 +21,6 @@ def carregar_produtos():
         if res.data:
             df = pd.DataFrame(res.data)
             df.columns = df.columns.astype(str).str.strip()
-            # Limpeza: Remove espaços invisíveis e o ".0" que o banco coloca em números
             for col in df.columns:
                 df[col] = df[col].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
             return df
@@ -49,7 +48,6 @@ def carregar_regras_validacao():
         if res.data:
             df = pd.DataFrame(res.data)
             df.columns = df.columns.astype(str).str.strip()
-            # Limpeza: Garante que os códigos das regras batam perfeitamente com o carrinho
             for col in df.columns:
                 df[col] = df[col].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
             return df
@@ -79,7 +77,7 @@ def carregar_configuracoes():
     except: pass
     return config_dict
 
-@st.cache_data(ttl=300) # Mantive o ttl=300 (5min), mas lembre-se que para tempo real talvez precise diminuir!
+@st.cache_data(ttl=300)
 def carregar_usuarios():
     try: 
         res = conectar_banco().table("Usuarios").select("*").execute()
@@ -129,8 +127,6 @@ def atualizar_senha_banco(email_usuario, nova_senha):
         return True
     except: return False
 
-
-# --- TRADUTOR DE "LINHA DO EXCEL" PARA "ID DO BANCO" ---
 def obter_id_por_index(tabela, row_index_planilha):
     pandas_index = row_index_planilha - 2
     df = carregar_todos_leads() if tabela == "Cadastro_Clientes" else carregar_todas_propostas()
@@ -140,15 +136,14 @@ def obter_id_por_index(tabela, row_index_planilha):
     elif 'ID' in df.columns: col_id = 'ID'
     
     if not col_id:
-        st.error(f"❌ **ERRO CRÍTICO:** A tabela `{tabela}` não possui a coluna 'id'. Vá no Supabase e crie a coluna 'id' (Tipo int8, marcada como Identity e Primary Key).")
+        st.error(f"❌ **ERRO CRÍTICO:** A tabela `{tabela}` não possui a coluna 'id'.")
         return None
         
     if pandas_index in df.index:
         return int(df.loc[pandas_index, col_id])
         
-    st.error(f"❌ Não foi possível encontrar a linha no banco de dados para a tabela {tabela}.")
+    st.error(f"❌ Não foi possível encontrar a linha no banco de dados.")
     return None
-
 
 def salvar_lead(ld, vendedor, email):
     try:
@@ -171,7 +166,6 @@ def salvar_lead(ld, vendedor, email):
             "Data_Atualizacao": ""
         }
         conectar_banco().table("Cadastro_Clientes").insert(dados).execute()
-        
         df = carregar_todos_leads()
         return len(df) + 1 
     except Exception as err:
@@ -318,12 +312,32 @@ def efetivar_aprovacao(row_index_planilha):
         st.error(f"❌ Erro Supabase ao aprovar proposta: {err}")
         return False
 
-# --- NOVA FUNÇÃO DE SINAL DE VIDA ---
 def registrar_atividade(email_usuario):
     try:
-        agora = obter_data_hora_brasil()
-        conectar_banco().table("Usuarios").update({"Ultimo_Acesso": agora}).eq("Email", email_usuario).execute()
+        fuso_br = datetime.timezone(datetime.timedelta(hours=-3))
+        agora_dt = datetime.datetime.now(fuso_br)
+        if 8 <= agora_dt.hour < 18:
+            agora_str = agora_dt.strftime("%d/%m/%Y %H:%M:%S")
+            conectar_banco().table("Usuarios").update({"Ultimo_Acesso": agora_str}).eq("Email", email_usuario).execute()
+            return True
+        return False
+    except Exception as e:
+        return False
+
+# --- NOVAS FUNÇÕES PARA O PAINEL DE CONTROLE ---
+@st.cache_data(ttl=60)
+def carregar_tabela_configuracoes():
+    """Puxa a tabela bruta de Configurações para edição pelo Administrador."""
+    try:
+        res = conectar_banco().table("Configuracoes").select("*").execute()
+        return pd.DataFrame(res.data) if res.data else pd.DataFrame()
+    except: return pd.DataFrame()
+
+def atualizar_valor_configuracao(parametro, novo_valor):
+    """Atualiza uma configuração específica no Supabase."""
+    try:
+        conectar_banco().table("Configuracoes").update({"Valor": str(novo_valor)}).eq("Parametro", parametro).execute()
         return True
     except Exception as e:
-        # Pass silenciado para não interromper a navegação do vendedor caso o banco pisque
+        st.error(f"Erro ao atualizar {parametro}: {e}")
         return False
