@@ -403,7 +403,7 @@ def tela_principal():
                         else:
                             dados_novo = {
                                 "Nome": novo_nome, 
-                                "Email": str(novo_email).lower().strip(), # Salva formatado direto na coluna original
+                                "Email": str(novo_email).lower().strip(), 
                                 "Senha": nova_senha, 
                                 "Perfil": novo_perfil, 
                                 "Unidade": nova_unidade,
@@ -424,11 +424,24 @@ def tela_principal():
                 if df_all_users.empty:
                     st.info("Nenhum usuário localizado no banco de dados.")
                 else:
-                    lista_emails = sorted(df_all_users['Email'].dropna().tolist())
-                    user_selecionado = st.selectbox("Selecione o E-mail do usuário para editar:", ["Selecione..."] + lista_emails)
+                    # --- MÁGICA AQUI: Criando o mapa Nome (Email) ---
+                    opcoes_exibicao = []
+                    mapa_usuarios = {}
+                    for _, u in df_all_users.iterrows():
+                        nome_exib = str(u.get('Nome', 'Sem Nome')).strip()
+                        email_exib = str(u.get('Email', '')).strip()
+                        if email_exib:
+                            txt_opcao = f"{nome_exib} ({email_exib})"
+                            opcoes_exibicao.append(txt_opcao)
+                            mapa_usuarios[txt_opcao] = email_exib # Guarda o e-mail real como chave
+                            
+                    opcoes_exibicao = sorted(opcoes_exibicao)
                     
-                    if user_selecionado != "Selecione...":
-                        user_data = df_all_users[df_all_users['Email'] == user_selecionado].iloc[0]
+                    user_selecionado_txt = st.selectbox("Selecione o usuário para editar:", ["Selecione..."] + opcoes_exibicao)
+                    
+                    if user_selecionado_txt != "Selecione...":
+                        email_real = mapa_usuarios[user_selecionado_txt] # Resgata o email por trás do nome
+                        user_data = df_all_users[df_all_users['Email'] == email_real].iloc[0]
                         
                         with st.form("form_edit_user"):
                             c1, c2 = st.columns(2)
@@ -473,7 +486,7 @@ def tela_principal():
                                         "Login_CRM": ed_login_crm,
                                         "Perfil_Acesso": ed_perfil_acesso
                                     }
-                                    suc, msg = atualizar_usuario_banco(user_selecionado, dados_update)
+                                    suc, msg = atualizar_usuario_banco(email_real, dados_update) # Usa o email original para a busca
                                     if suc:
                                         st.success(msg)
                                         st.cache_data.clear()
