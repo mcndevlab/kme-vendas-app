@@ -15,7 +15,8 @@ from modulos.db import (carregar_produtos, carregar_valores_sensores, carregar_v
                         carregar_minhas_propostas, salvar_lead, atualizar_lead, salvar_proposta,
                         atualizar_proposta_modificada, efetivar_renovacao, efetivar_atualizacao_temperatura,
                         efetivar_perda, efetivar_aprovacao, 
-                        carregar_tabela_configuracoes, atualizar_valor_configuracao) # IMPORTAÇÕES NOVAS
+                        carregar_tabela_configuracoes, atualizar_valor_configuracao,
+                        adicionar_usuario_banco, atualizar_usuario_banco) # IMPORTAÇÕES DE USUÁRIOS
 
 from modulos.utils import (padronizar_nome, padronizar_telefone, extrair_tabela_crm_itens,
                            validar_inconsistencias_carrinho, calcular_novos_valores_proposta,
@@ -266,7 +267,6 @@ def tela_principal():
     df_users_chk = carregar_usuarios()
     is_admin = False
     if not df_users_chk.empty and 'Perfil_Acesso' in df_users_chk.columns:
-        # Busca o usuário logado na tabela
         user_info = df_users_chk[df_users_chk['Email'].astype(str).str.lower().str.strip() == st.session_state['email_usuario'].lower().strip()]
         if not user_info.empty:
             perfil_acc = str(user_info.iloc[0].get('Perfil_Acesso', '')).strip().lower()
@@ -326,7 +326,7 @@ def tela_principal():
         st.header("⚙️ Painel de Controle")
         st.caption("Área exclusiva para Gestão Técnica e Configurações do Sistema.")
         
-        aba_config, aba_usuarios = st.tabs(["🛠️ Configurações Gerais", "🔒 Em Breve..."])
+        aba_config, aba_usuarios = st.tabs(["🛠️ Configurações Gerais", "👥 Gestão de Usuários"])
         
         with aba_config:
             st.markdown("#### Tabela de Configurações")
@@ -337,7 +337,6 @@ def tela_principal():
             if df_configs.empty:
                 st.info("Nenhuma configuração encontrada na tabela 'Configuracoes'.")
             else:
-                # Descobre o nome exato da coluna Descrição (com ou sem acento)
                 col_desc = 'Descricao' if 'Descricao' in df_configs.columns else ('Descrição' if 'Descrição' in df_configs.columns else None)
                 
                 with st.form("form_configs"):
@@ -361,17 +360,129 @@ def tela_principal():
                         
                         for p, v in novos_valores.items():
                             val_antigo = str(df_configs[df_configs['Parametro'] == p]['Valor'].values[0])
-                            # Só manda requisição pro banco se o valor realmente mudou
                             if v != val_antigo:
                                 if not atualizar_valor_configuracao(p, v):
                                     sucesso_geral = False
                         
                         if sucesso_geral:
                             st.success("✅ Configurações atualizadas no Supabase com sucesso!")
-                            st.cache_data.clear() # Limpa o cache para recarregar as novas regras de juros/prazos
+                            st.cache_data.clear() 
                             st.rerun()
                         else:
                             st.error("⚠️ Ocorreu um erro ao atualizar algumas configurações.")
+
+        with aba_usuarios:
+            st.markdown("#### Gerenciamento da Equipe")
+            df_all_users = carregar_usuarios()
+            
+            acao_user = st.radio("Selecione a ação desejada:", ["Adicionar Novo Usuário", "Editar Usuário Existente"], horizontal=True)
+            st.write("---")
+            
+            if acao_user == "Adicionar Novo Usuário":
+                with st.form("form_novo_user"):
+                    c1, c2 = st.columns(2)
+                    novo_nome = c1.text_input("Nome Completo *")
+                    novo_email = c2.text_input("E-mail (Login) *")
+                    
+                    c3, c4 = st.columns(2)
+                    nova_senha = c3.text_input("Senha *")
+                    novo_status = c4.selectbox("Status no Sistema", ["Ativo", "Inativo"])
+                    
+                    c5, c6, c7 = st.columns(3)
+                    novo_perfil = c5.selectbox("Cargo/Perfil", ["Vendedor", "Lider", "Gerente_Unidade", "Gerente_Varejo", "Gerente_Condominio", "Diretoria"])
+                    nova_unidade = c6.text_input("Unidade Base (Ex: Matriz)")
+                    nova_vertical = c7.text_input("Vertical (Ex: Varejo, Condominio)")
+                    
+                    c8, c9 = st.columns(2)
+                    novo_login_crm = c8.text_input("Login do CRM")
+                    novo_perfil_acesso = c9.selectbox("Perfil de Acesso (App)", ["padrao", "administrador"])
+                    
+                    if st.form_submit_button("➕ Salvar Novo Usuário", type="primary"):
+                        if not novo_nome or not novo_email or not nova_senha:
+                            st.error("⚠️ Nome, E-mail e Senha são campos obrigatórios!")
+                        else:
+                            dados_novo = {
+                                "Nome": novo_nome, 
+                                "Email": novo_email, 
+                                "Email_C": str(novo_email).lower().strip(),
+                                "Senha": nova_senha, 
+                                "Perfil": novo_perfil, 
+                                "Unidade": nova_unidade,
+                                "Vertical": nova_vertical, 
+                                "Status": novo_status, 
+                                "Login_CRM": novo_login_crm,
+                                "Perfil_Acesso": novo_perfil_acesso
+                            }
+                            suc, msg = adicionar_usuario_banco(dados_novo)
+                            if suc:
+                                st.success(msg)
+                                st.cache_data.clear()
+                                st.rerun()
+                            else:
+                                st.error(msg)
+                                
+            else: 
+                if df_all_users.empty:
+                    st.info("Nenhum usuário localizado no banco de dados.")
+                else:
+                    lista_emails = sorted(df_all_users['Email'].dropna().tolist())
+                    user_selecionado = st.selectbox("Selecione o E-mail do usuário para editar:", ["Selecione..."] + lista_emails)
+                    
+                    if user_selecionado != "Selecione...":
+                        user_data = df_all_users[df_all_users['Email'] == user_selecionado].iloc[0]
+                        
+                        with st.form("form_edit_user"):
+                            c1, c2 = st.columns(2)
+                            ed_nome = c1.text_input("Nome Completo *", value=str(user_data.get('Nome', '')))
+                            ed_email = c2.text_input("E-mail (Login) *", value=str(user_data.get('Email', '')))
+                            
+                            c3, c4 = st.columns(2)
+                            ed_senha = c3.text_input("Senha *", value=str(user_data.get('Senha', '')))
+                            
+                            opcoes_status = ["Ativo", "Inativo"]
+                            idx_status = opcoes_status.index(user_data.get('Status', 'Ativo')) if user_data.get('Status', 'Ativo') in opcoes_status else 0
+                            ed_status = c4.selectbox("Status no Sistema", opcoes_status, index=idx_status)
+                            
+                            c5, c6, c7 = st.columns(3)
+                            opcoes_perfil = ["Vendedor", "Lider", "Gerente_Unidade", "Gerente_Varejo", "Gerente_Condominio", "Diretoria"]
+                            idx_perfil = opcoes_perfil.index(user_data.get('Perfil', 'Vendedor')) if user_data.get('Perfil', 'Vendedor') in opcoes_perfil else 0
+                            ed_perfil = c5.selectbox("Cargo/Perfil", opcoes_perfil, index=idx_perfil)
+                            
+                            ed_unidade = c6.text_input("Unidade Base", value=str(user_data.get('Unidade', '')).replace('nan',''))
+                            ed_vertical = c7.text_input("Vertical", value=str(user_data.get('Vertical', '')).replace('nan','')) 
+                            
+                            c8, c9 = st.columns(2)
+                            ed_login_crm = c8.text_input("Login do CRM", value=str(user_data.get('Login_CRM', '')).replace('nan',''))
+                            
+                            opcoes_acc = ["padrao", "administrador"]
+                            curr_acc = str(user_data.get('Perfil_Acesso', 'padrao')).lower().strip()
+                            idx_acc = opcoes_acc.index(curr_acc) if curr_acc in opcoes_acc else 0
+                            ed_perfil_acesso = c9.selectbox("Perfil de Acesso (App)", opcoes_acc, index=idx_acc)
+                            
+                            if st.form_submit_button("💾 Salvar Alterações", type="primary"):
+                                if not ed_nome or not ed_email or not ed_senha:
+                                    st.error("⚠️ Nome, E-mail e Senha são campos obrigatórios!")
+                                else:
+                                    dados_update = {
+                                        "Nome": ed_nome, 
+                                        "Email": ed_email, 
+                                        "Email_C": str(ed_email).lower().strip(),
+                                        "Senha": ed_senha, 
+                                        "Perfil": ed_perfil, 
+                                        "Unidade": ed_unidade,
+                                        "Vertical": ed_vertical, 
+                                        "Status": ed_status, 
+                                        "Login_CRM": ed_login_crm,
+                                        "Perfil_Acesso": ed_perfil_acesso
+                                    }
+                                    suc, msg = atualizar_usuario_banco(user_selecionado, dados_update)
+                                    if suc:
+                                        st.success(msg)
+                                        st.cache_data.clear()
+                                        st.rerun()
+                                    else:
+                                        st.error(msg)
+
 
     elif st.session_state["etapa_atual"] == "dashboard":
         st.header("📈 Dashboard Gerencial")
@@ -379,8 +490,10 @@ def tela_principal():
         df_users['Email_C'] = df_users['Email'].astype(str).str.strip().str.lower()
         perfil, minha_unidade = st.session_state['perfil_usuario'], st.session_state['unidade_usuario'].lower()
         
+        # Filtros Compartilhados
         df_eq_leads, df_eq_prop, mapa_vendedores, sel_filtros = aplicar_filtros_gerenciais(df_users, carregar_todos_leads(), carregar_todas_propostas(), perfil, minha_unidade)
         
+        # Cálculos de Conversão
         total_leads = len(df_eq_leads)
         total_propostas = len(df_eq_prop)
         df_aprovadas = df_eq_prop[df_eq_prop['Status_Proposta'].astype(str).str.strip() == 'Aprovada'].copy() if not df_eq_prop.empty else pd.DataFrame()
@@ -389,6 +502,7 @@ def tela_principal():
         conv_lead = (total_aprovadas / total_leads * 100) if total_leads > 0 else 0.0
         conv_prop = (total_aprovadas / total_propostas * 100) if total_propostas > 0 else 0.0
         
+        # Cálculos de Ticket Médio e Realizado
         tm_mrr, tm_setup, realizado_mrr, realizado_setup = 0.0, 0.0, 0.0, 0.0
         if not df_aprovadas.empty:
             df_aprovadas['Val_MRR'] = df_aprovadas['Total_MRR'].apply(converter_para_numero)
@@ -408,6 +522,7 @@ def tela_principal():
 
         st.divider()
 
+        # Descobrir o dia de referência para proporcionalidade
         dia_ref = datetime.datetime.now().day
         if sel_filtros["dia"] != "Todos":
             try: dia_ref = int(sel_filtros["dia"].split("/")[0])
@@ -417,9 +532,10 @@ def tela_principal():
                 mes_sel, ano_sel = sel_filtros["mes"].split("/")
                 hoje = datetime.datetime.now()
                 if int(mes_sel) != hoje.month or int(ano_sel) != hoje.year:
-                    dia_ref = 30 
+                    dia_ref = 30 # Se for um mês fechado do passado, considera meta cheia de 30 dias
             except: pass
 
+        # Cruzamento Inteligente das Metas dos Vendedores Filtrados
         meta_total_mrr, meta_total_setup = 0.0, 0.0
         if mapa_vendedores:
             df_vendedores_filtrados = df_users[df_users['Email_C'].isin(mapa_vendedores.keys())]
@@ -431,7 +547,7 @@ def tela_principal():
                 elif 'condominio' in vert:
                     meta_total_mrr += float(cfg.get("Meta_Condominio_Receita_Vendedor", 2500))
                     meta_total_setup += float(cfg.get("Meta_Condominio_Produtos_Vendedor", 10000))
-                else: 
+                else: # Default
                     meta_total_mrr += float(cfg.get("Meta_Varejo_Receita_Vendedor", 1250))
                     meta_total_setup += float(cfg.get("Meta_Varejo_Produtos_Vendedor", 5000))
         
@@ -881,12 +997,8 @@ def tela_principal():
                     cliente, nome_prop = str(row.get('Nome_Cliente', '')), str(row.get('Nome_Proposta', 'Principal'))
                     status, mrr, setup = str(row.get('Status_Proposta', 'Em Negociação')).strip() or "Em Negociação", str(row.get('Total_MRR', '')), str(row.get('Total_Setup', ''))
                     temperatura = str(row.get('Temperatura', 'Morno 🌤️')).split(" ")[0]
-                    
-                    prop_renovada = str(row.get('Data_Proposta_Renovada', '')).replace('nan', '').replace('None', '').strip()
-                    data_ref_prop_str = prop_renovada if prop_renovada else str(row.get('Data_Proposta', '')).replace('nan', '').replace('None', '').strip()
-                    
-                    temp_renovada = str(row.get('Data_Temperatura_Renovada', '')).replace('nan', '').replace('None', '').strip()
-                    data_ref_temp_str = temp_renovada if temp_renovada else str(row.get('Data_Proposta', '')).replace('nan', '').replace('None', '').strip()
+                    data_ref_prop_str = str(row.get('Data_Proposta_Renovada', '')).strip() or str(row.get('Data_Proposta', '')).strip()
+                    data_ref_temp_str = str(row.get('Data_Temperatura_Renovada', '')).strip() or str(row.get('Data_Proposta', '')).strip()
                     vendedor = str(row.get('Nome_Usuario', ''))
                     
                     tempo_faltante = "-"
@@ -930,7 +1042,6 @@ def tela_principal():
                         condicao_txt = f"{str(row.get('Parcelas', '1x'))} de {str(row.get('Valor_Parcela', 'R$ 0,00'))} ({str(row.get('Forma_Pagamento', 'Boleto'))})"
                         
                         html_prop = gerar_html_proposta(cliente, nome_prop, vendedor, itens_para_html, mrr, setup, condicao_txt)
-                        
                         docx_bytes, erro_docx = gerar_documento_contrato(lead_para_contrato, mrr, setup, condicao_txt, row.get('Itens_Orcamento', ''))
                         
                         opcoes_acao = ["Selecione...", "📄 PDF Proposta", "📄 PDF Contrato", "✍️ Assinar Zapsign"]
