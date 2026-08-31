@@ -324,20 +324,37 @@ def registrar_atividade(email_usuario):
     except Exception as e:
         return False
 
-# --- NOVAS FUNÇÕES PARA O PAINEL DE CONTROLE ---
 @st.cache_data(ttl=60)
 def carregar_tabela_configuracoes():
-    """Puxa a tabela bruta de Configurações para edição pelo Administrador."""
     try:
         res = conectar_banco().table("Configuracoes").select("*").execute()
-        return pd.DataFrame(res.data) if res.data else pd.DataFrame()
-    except: return pd.DataFrame()
+        if res.data: return pd.DataFrame(res.data)
+        res_acento = conectar_banco().table("Configurações").select("*").execute()
+        if res_acento.data: return pd.DataFrame(res_acento.data)
+        return pd.DataFrame()
+    except Exception as e:
+        st.error(f"🚨 Erro ao buscar tabela no Supabase: {e}")
+        return pd.DataFrame()
 
 def atualizar_valor_configuracao(parametro, novo_valor):
-    """Atualiza uma configuração específica no Supabase."""
     try:
         conectar_banco().table("Configuracoes").update({"Valor": str(novo_valor)}).eq("Parametro", parametro).execute()
         return True
     except Exception as e:
         st.error(f"Erro ao atualizar {parametro}: {e}")
         return False
+
+# --- NOVAS FUNÇÕES DE GESTÃO DE USUÁRIOS ---
+def adicionar_usuario_banco(dados):
+    try:
+        conectar_banco().table("Usuarios").insert(dados).execute()
+        return True, "Usuário adicionado com sucesso!"
+    except Exception as e:
+        return False, f"Erro Supabase: {e}"
+
+def atualizar_usuario_banco(email_original, dados):
+    try:
+        conectar_banco().table("Usuarios").update(dados).eq("Email", email_original).execute()
+        return True, "Usuário atualizado com sucesso!"
+    except Exception as e:
+        return False, f"Erro Supabase: {e}"
