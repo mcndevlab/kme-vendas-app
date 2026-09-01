@@ -16,7 +16,7 @@ from modulos.db import (carregar_produtos, carregar_valores_sensores, carregar_v
                         atualizar_proposta_modificada, efetivar_renovacao, efetivar_atualizacao_temperatura,
                         efetivar_perda, efetivar_aprovacao, 
                         carregar_tabela_configuracoes, atualizar_valor_configuracao,
-                        adicionar_usuario_banco, atualizar_usuario_banco) # IMPORTAÇÕES DE USUÁRIOS
+                        adicionar_usuario_banco, atualizar_usuario_banco)
 
 from modulos.utils import (padronizar_nome, padronizar_telefone, extrair_tabela_crm_itens,
                            validar_inconsistencias_carrinho, calcular_novos_valores_proposta,
@@ -45,6 +45,7 @@ def carregar_proposta_para_simulador(idx_planilha, dados_prop, df_produtos, df_l
     
     st.session_state["temp_proposta_atual"] = str(dados_prop.get('Temperatura', 'Selecione...'))
     st.session_state["status_proposta_atual"] = str(dados_prop.get('Status_Proposta', 'Selecione...'))
+    st.session_state["segmento_proposta_atual"] = "Selecione..." # O segmento sempre zera na edição para forçar o vendedor a carregar os itens corretos
     st.session_state["status_credito_deps"] = None
     st.session_state["tempo_empresa_credito"] = None
     st.session_state["situacao_cnpj"] = None
@@ -311,6 +312,7 @@ def tela_principal():
             "lead_dados": {}, "lead_salvo": False, "renovar_proposta_idx": None, 
             "proposta_idx_editando": None, "editando_lead_idx": None, "nome_proposta_atual": "", 
             "temp_proposta_atual": "Selecione...", "status_proposta_atual": "Selecione...", 
+            "segmento_proposta_atual": "Selecione...", # Zera o segmento
             "status_credito_deps": None, "tempo_empresa_credito": None, "situacao_cnpj": None,
             "ultimo_gps_capturado": "", "item_aberto": None, "unidade_mo_selecionada": None, 
             "gatilho_limpar_tudo": False
@@ -424,7 +426,6 @@ def tela_principal():
                 if df_all_users.empty:
                     st.info("Nenhum usuário localizado no banco de dados.")
                 else:
-                    # --- MÁGICA AQUI: Criando o mapa seguro e limpando o (nan) ---
                     opcoes_exibicao = []
                     mapa_usuarios = {}
                     
@@ -432,11 +433,9 @@ def tela_principal():
                         nome_exib = str(u.get('Nome', 'Sem Nome')).strip()
                         email_exib = str(u.get('Email', '')).strip()
                         
-                        # Limpa o (nan) e deixa elegante
                         if email_exib.lower() == 'nan' or not email_exib:
                             email_exib = "Sem Email cadastrado"
                             
-                        # Cria o texto visual e vincula ao índice exato da tabela (idx)
                         txt_opcao = f"{nome_exib} ({email_exib}) - ID: {u.get('id', idx)}"
                         opcoes_exibicao.append(txt_opcao)
                         mapa_usuarios[txt_opcao] = idx
@@ -446,7 +445,6 @@ def tela_principal():
                     user_selecionado_txt = st.selectbox("Selecione o usuário para editar:", ["Selecione..."] + opcoes_exibicao)
                     
                     if user_selecionado_txt != "Selecione...":
-                        # Resgata a linha exata usando o índice seguro
                         idx_real = mapa_usuarios[user_selecionado_txt]
                         user_data = df_all_users.loc[idx_real]
                         
@@ -497,8 +495,6 @@ def tela_principal():
                                         "Login_CRM": ed_login_crm,
                                         "Perfil_Acesso": ed_perfil_acesso
                                     }
-                                    
-                                    # Passa o ID e o email original para garantir a edição exata
                                     suc, msg = atualizar_usuario_banco(id_usuario, email_original, dados_update)
                                     if suc:
                                         st.success(msg)
@@ -514,10 +510,8 @@ def tela_principal():
         df_users['Email_C'] = df_users['Email'].astype(str).str.strip().str.lower()
         perfil, minha_unidade = st.session_state['perfil_usuario'], st.session_state['unidade_usuario'].lower()
         
-        # Filtros Compartilhados
         df_eq_leads, df_eq_prop, mapa_vendedores, sel_filtros = aplicar_filtros_gerenciais(df_users, carregar_todos_leads(), carregar_todas_propostas(), perfil, minha_unidade)
         
-        # Cálculos de Conversão
         total_leads = len(df_eq_leads)
         total_propostas = len(df_eq_prop)
         df_aprovadas = df_eq_prop[df_eq_prop['Status_Proposta'].astype(str).str.strip() == 'Aprovada'].copy() if not df_eq_prop.empty else pd.DataFrame()
@@ -526,7 +520,6 @@ def tela_principal():
         conv_lead = (total_aprovadas / total_leads * 100) if total_leads > 0 else 0.0
         conv_prop = (total_aprovadas / total_propostas * 100) if total_propostas > 0 else 0.0
         
-        # Cálculos de Ticket Médio e Realizado
         tm_mrr, tm_setup, realizado_mrr, realizado_setup = 0.0, 0.0, 0.0, 0.0
         if not df_aprovadas.empty:
             df_aprovadas['Val_MRR'] = df_aprovadas['Total_MRR'].apply(converter_para_numero)
@@ -546,7 +539,6 @@ def tela_principal():
 
         st.divider()
 
-        # Descobrir o dia de referência para proporcionalidade
         dia_ref = datetime.datetime.now().day
         if sel_filtros["dia"] != "Todos":
             try: dia_ref = int(sel_filtros["dia"].split("/")[0])
@@ -556,10 +548,9 @@ def tela_principal():
                 mes_sel, ano_sel = sel_filtros["mes"].split("/")
                 hoje = datetime.datetime.now()
                 if int(mes_sel) != hoje.month or int(ano_sel) != hoje.year:
-                    dia_ref = 30 # Se for um mês fechado do passado, considera meta cheia de 30 dias
+                    dia_ref = 30 
             except: pass
 
-        # Cruzamento Inteligente das Metas dos Vendedores Filtrados
         meta_total_mrr, meta_total_setup = 0.0, 0.0
         if mapa_vendedores:
             df_vendedores_filtrados = df_users[df_users['Email_C'].isin(mapa_vendedores.keys())]
@@ -571,7 +562,7 @@ def tela_principal():
                 elif 'condominio' in vert:
                     meta_total_mrr += float(cfg.get("Meta_Condominio_Receita_Vendedor", 2500))
                     meta_total_setup += float(cfg.get("Meta_Condominio_Produtos_Vendedor", 10000))
-                else: # Default
+                else: 
                     meta_total_mrr += float(cfg.get("Meta_Varejo_Receita_Vendedor", 1250))
                     meta_total_setup += float(cfg.get("Meta_Varejo_Produtos_Vendedor", 5000))
         
@@ -1066,6 +1057,7 @@ def tela_principal():
                         condicao_txt = f"{str(row.get('Parcelas', '1x'))} de {str(row.get('Valor_Parcela', 'R$ 0,00'))} ({str(row.get('Forma_Pagamento', 'Boleto'))})"
                         
                         html_prop = gerar_html_proposta(cliente, nome_prop, vendedor, itens_para_html, mrr, setup, condicao_txt)
+                        
                         docx_bytes, erro_docx = gerar_documento_contrato(lead_para_contrato, mrr, setup, condicao_txt, row.get('Itens_Orcamento', ''))
                         
                         opcoes_acao = ["Selecione...", "📄 PDF Proposta", "📄 PDF Contrato", "✍️ Assinar Zapsign"]
@@ -1239,7 +1231,7 @@ def tela_principal():
                         btn1, btn2 = st.columns([7, 3])
                         with btn1:
                             if st.button("Proposta", key=f"btn_lead_{idx}", use_container_width=True): 
-                                st.session_state.update({"lead_dados": {"data_cadastro": data_cad, "nome": nome, "cpf_cnpj": str(row.get('CPF_CNPJ', '')).replace('nan', ''), "data_nascimento": str(row.get("Data_Nascimento", "")).replace('nan', ''), "endereco": str(row.get('Endereco', '')).replace('nan', ''), "numero": str(row.get('Numero', '')).replace('nan', ''), "cidade": str(row.get('Cidade', '')).replace('nan', ''), "estado": str(row.get("Estado", "")).replace('nan', ''), "telefone": telefone, "email_cliente": str(row.get('Email_Cliente', '')).replace('nan', ''), "contato": str(row.get('Contato', '')).replace('nan', ''), "gps": str(row.get("Coordenadas_GPS", "")).replace('nan', '')}, "lead_salvo": True, "gatilho_limpar_carrinho": True, "etapa_atual": "simulador", "editando_lead_idx": linha_real_planilha, "nome_proposta_atual": "", "temp_proposta_atual": "Selecione...", "status_proposta_atual": "Selecione...", "status_credito_deps": None}); st.rerun()
+                                st.session_state.update({"lead_dados": {"data_cadastro": data_cad, "nome": nome, "cpf_cnpj": str(row.get('CPF_CNPJ', '')).replace('nan', ''), "data_nascimento": str(row.get("Data_Nascimento", "")).replace('nan', ''), "endereco": str(row.get('Endereco', '')).replace('nan', ''), "numero": str(row.get('Numero', '')).replace('nan', ''), "cidade": str(row.get('Cidade', '')).replace('nan', ''), "estado": str(row.get("Estado", "")).replace('nan', ''), "telefone": telefone, "email_cliente": str(row.get('Email_Cliente', '')).replace('nan', ''), "contato": str(row.get('Contato', '')).replace('nan', ''), "gps": str(row.get("Coordenadas_GPS", "")).replace('nan', '')}, "lead_salvo": True, "gatilho_limpar_carrinho": True, "etapa_atual": "simulador", "editando_lead_idx": linha_real_planilha, "nome_proposta_atual": "", "temp_proposta_atual": "Selecione...", "status_proposta_atual": "Selecione...", "segmento_proposta_atual": "Selecione...", "status_credito_deps": None}); st.rerun()
                         with btn2:
                             if st.button("✏️", help="Editar", key=f"btn_edit_lead_{idx}", use_container_width=True): 
                                 st.session_state.update({"lead_dados": {"data_cadastro": data_cad, "nome": nome, "cpf_cnpj": str(row.get('CPF_CNPJ', '')).replace('nan', ''), "data_nascimento": str(row.get("Data_Nascimento", "")).replace('nan', ''), "endereco": str(row.get('Endereco', '')).replace('nan', ''), "numero": str(row.get('Numero', '')).replace('nan', ''), "cidade": str(row.get('Cidade', '')).replace('nan', ''), "estado": str(row.get("Estado", "")).replace('nan', ''), "telefone": telefone, "email_cliente": str(row.get('Email_Cliente', '')).replace('nan', ''), "contato": str(row.get('Contato', '')).replace('nan', ''), "gps": str(row.get("Coordenadas_GPS", "")).replace('nan', '')}, "lead_salvo": True, "etapa_atual": "lead", "editando_lead_idx": linha_real_planilha}); st.rerun()
@@ -1266,7 +1258,7 @@ def tela_principal():
                         c_b1, c_b2 = st.columns([7, 3])
                         with c_b1:
                             if st.button("➕ Criar Proposta", key=f"btn_lead_{idx}", type="primary", use_container_width=True): 
-                                st.session_state.update({"lead_dados": {"data_cadastro": data_cad, "nome": nome, "cpf_cnpj": str(row.get('CPF_CNPJ', '')).replace('nan', ''), "data_nascimento": str(row.get("Data_Nascimento", "")).replace('nan', ''), "endereco": str(row.get('Endereco', '')).replace('nan', ''), "numero": str(row.get('Numero', '')).replace('nan', ''), "cidade": str(row.get('Cidade', '')).replace('nan', ''), "estado": str(row.get("Estado", "")).replace('nan', ''), "telefone": telefone, "email_cliente": str(row.get('Email_Cliente', '')).replace('nan', ''), "contato": str(row.get('Contato', '')).replace('nan', ''), "gps": str(row.get("Coordenadas_GPS", "")).replace('nan', '')}, "lead_salvo": True, "gatilho_limpar_carrinho": True, "etapa_atual": "simulador", "editando_lead_idx": linha_real_planilha, "nome_proposta_atual": "", "temp_proposta_atual": "Selecione...", "status_proposta_atual": "Selecione...", "status_credito_deps": None}); st.rerun()
+                                st.session_state.update({"lead_dados": {"data_cadastro": data_cad, "nome": nome, "cpf_cnpj": str(row.get('CPF_CNPJ', '')).replace('nan', ''), "data_nascimento": str(row.get("Data_Nascimento", "")).replace('nan', ''), "endereco": str(row.get('Endereco', '')).replace('nan', ''), "numero": str(row.get('Numero', '')).replace('nan', ''), "cidade": str(row.get('Cidade', '')).replace('nan', ''), "estado": str(row.get("Estado", "")).replace('nan', ''), "telefone": telefone, "email_cliente": str(row.get('Email_Cliente', '')).replace('nan', ''), "contato": str(row.get('Contato', '')).replace('nan', ''), "gps": str(row.get("Coordenadas_GPS", "")).replace('nan', '')}, "lead_salvo": True, "gatilho_limpar_carrinho": True, "etapa_atual": "simulador", "editando_lead_idx": linha_real_planilha, "nome_proposta_atual": "", "temp_proposta_atual": "Selecione...", "status_proposta_atual": "Selecione...", "segmento_proposta_atual": "Selecione...", "status_credito_deps": None}); st.rerun()
                         with c_b2:
                             if st.button("✏️ Editar", key=f"btn_edit_lead_{idx}", use_container_width=True): 
                                 st.session_state.update({"lead_dados": {"data_cadastro": data_cad, "nome": nome, "cpf_cnpj": str(row.get('CPF_CNPJ', '')).replace('nan', ''), "data_nascimento": str(row.get("Data_Nascimento", "")).replace('nan', ''), "endereco": str(row.get('Endereco', '')).replace('nan', ''), "numero": str(row.get('Numero', '')).replace('nan', ''), "cidade": str(row.get('Cidade', '')).replace('nan', ''), "estado": str(row.get("Estado", "")).replace('nan', ''), "telefone": telefone, "email_cliente": str(row.get('Email_Cliente', '')).replace('nan', ''), "contato": str(row.get('Contato', '')).replace('nan', ''), "gps": str(row.get("Coordenadas_GPS", "")).replace('nan', '')}, "lead_salvo": True, "etapa_atual": "lead", "editando_lead_idx": linha_real_planilha}); st.rerun()
@@ -1385,7 +1377,7 @@ def tela_principal():
                         if atualizar_lead(idx_editando_lead, st.session_state["lead_dados"]): st.toast("Cliente atualizado!"); st.cache_data.clear(); st.session_state["etapa_atual"] = "meus_leads"; st.rerun()
                     else:
                         novo_idx = salvar_lead(st.session_state["lead_dados"], st.session_state["nome_usuario"], st.session_state["email_usuario"])
-                        if novo_idx: st.session_state.update({"lead_salvo": True, "etapa_atual": "simulador", "editando_lead_idx": novo_idx, "nome_proposta_atual": "", "temp_proposta_atual": "Selecione...", "status_proposta_atual": "Selecione...", "status_credito_deps": None}); st.toast("Cliente salvo!"); st.cache_data.clear(); st.rerun()
+                        if novo_idx: st.session_state.update({"lead_salvo": True, "etapa_atual": "simulador", "editando_lead_idx": novo_idx, "nome_proposta_atual": "", "temp_proposta_atual": "Selecione...", "status_proposta_atual": "Selecione...", "segmento_proposta_atual": "Selecione...", "status_credito_deps": None}); st.toast("Cliente salvo!"); st.cache_data.clear(); st.rerun()
 
     elif st.session_state["etapa_atual"] == "simulador":
         st.write("### 🛒 2. Simulador de Vendas")
@@ -1403,7 +1395,7 @@ def tela_principal():
             lim_p, lim_a, lim_i = cfg.get("Desc_Max_Produtos", 15.0), cfg.get("Desc_Max_Alarme", 15.0), cfg.get("Desc_Max_Imagem", 30.0)
             unidades_disponiveis = sorted(list(set(df_valor_ponto['Unidade'].dropna().astype(str).str.strip()))) if not df_valor_ponto.empty and 'Unidade' in df_valor_ponto.columns else ["Padrão"]
 
-            c_nome, c_temp, c_status, c_unid = st.columns([3, 2, 2, 3])
+            c_nome, c_temp, c_status, c_unid, c_seg = st.columns([2.5, 1.5, 1.5, 2.5, 2])
             with c_nome:
                 nome_proposta = st.text_input("📝 Nome/Referência da Proposta (Ex: Matriz, Filial)", value=st.session_state.get("nome_proposta_atual", ""))
                 if not nome_proposta.strip():
@@ -1435,6 +1427,16 @@ def tela_principal():
                 if not unidade_selecionada:
                     st.markdown('<p style="color:#d90429; font-size:0.85rem; margin-top:-10px; font-weight:600;">⚠️ Selecione a unidade de MO.</p>', unsafe_allow_html=True)
             
+            with c_seg:
+                opcoes_segmento = ["Selecione...", "KMA", "KRV", "KAV", "KPV", "IOT"]
+                seg_salvo = st.session_state.get("segmento_proposta_atual", "Selecione...")
+                if seg_salvo not in opcoes_segmento: seg_salvo = "Selecione..."
+                segmento_escolhido = st.selectbox("🏷️ Segmento de Produto", opcoes_segmento, index=opcoes_segmento.index(seg_salvo))
+                st.session_state["segmento_proposta_atual"] = segmento_escolhido
+                
+                if segmento_escolhido == "Selecione...":
+                    st.markdown('<p style="color:#d90429; font-size:0.85rem; margin-top:-10px; font-weight:600;">⚠️ Selecione o Segmento</p>', unsafe_allow_html=True)
+
             st.divider()
 
             col_produtos, col_resumo = st.columns([5, 5])
@@ -1457,66 +1459,80 @@ def tela_principal():
                 
             with col_produtos:
                 st.write("### ➕ Catálogo")
-                aba_servicos, aba_produtos, aba_mao_obra = st.tabs(["🔄 Serviços", "📦 Produtos", "🛠️ Mão de Obra"])
                 
-                def desenhar_card_produto(index, linha):
-                    is_aberto, nome_item_limpo, cat_limpa_card, cod_kme = st.session_state.get("item_aberto") == index, str(linha.get('Nome_Item', '')).strip(), str(linha.get('Categoria_Receita', '')).strip().lower(), str(linha.get('Codigo_KME', '')).strip()
-                    pv_card = converter_para_numero(linha.get('Preco_Venda', 0))
+                if segmento_escolhido == "Selecione...":
+                    st.info("👆 Selecione um **Segmento de Produto** no cabeçalho acima para carregar as opções do catálogo.")
+                else:
+                    # Filtra o dataframe principal para deixar apenas os itens do segmento selecionado
+                    if 'Segmento' in df_produtos.columns:
+                        df_catalogo = df_produtos[df_produtos['Segmento'].fillna("").astype(str).str.strip().str.upper() == segmento_escolhido.upper()]
+                    else:
+                        df_catalogo = pd.DataFrame()
+                        st.error("A coluna 'Segmento' não foi encontrada na tabela Base_Produtos.")
                     
-                    if unidade_selecionada and ("obra" in cat_limpa_card or "instala" in cat_limpa_card) and not df_valor_ponto.empty:
-                        match_mo_card = df_valor_ponto[(df_valor_ponto['Unidade'].astype(str).str.strip() == unidade_selecionada) & (df_valor_ponto['Nome_Item'].astype(str).str.strip() == nome_item_limpo)]
-                        if not match_mo_card.empty:
-                            pv_card = converter_para_numero(match_mo_card.iloc[0]['Valor_MO'])
-                            if str(match_mo_card.iloc[0].get('Codigo', '')).strip() and str(match_mo_card.iloc[0].get('Codigo', '')).strip() != 'nan': cod_kme = str(match_mo_card.iloc[0].get('Codigo', '')).strip()
+                    if df_catalogo.empty and 'Segmento' in df_produtos.columns:
+                        st.warning(f"Nenhum produto encontrado para o segmento **{segmento_escolhido}** no banco de dados.")
+                        
+                    aba_servicos, aba_produtos, aba_mao_obra = st.tabs(["🔄 Serviços", "📦 Produtos", "🛠️ Mão de Obra"])
                     
-                    if st.button(f"{'🔽' if is_aberto else '▶️'} {nome_item_limpo}{f' (Cód: {cod_kme})' if cod_kme else ''}", key=f"btn_acc_{index}", use_container_width=True): st.session_state["item_aberto"] = None if is_aberto else index; st.rerun()
-                    
-                    if is_aberto:
-                        with st.container():
-                            st.caption(f"**Grupo:** {linha.get('Grupo_Itens', 'N/A')} | **Categoria:** {linha.get('Categoria_Receita', '')}")
-                            c_qtd, c_add = st.columns([3, 7])
-                            qtd = c_qtd.number_input("Qtd", min_value=1, step=1, key=f"qtd_{index}")
-                            c_add.write(""); c_add.write("")
-                            if c_add.button("Adicionar ao Orçamento", key=f"btn_add_{index}", type="primary", use_container_width=True, disabled=(not unidade_selecionada)):
-                                st.session_state["carrinho"].append({"nome": nome_item_limpo, "codigo": cod_kme, "tipo_sensor": str(linha.get('Tipo_Sensor', '')), "categoria": str(linha.get('Categoria_Receita', '')), "grupo": str(linha.get('Grupo_Itens', '')), "quantidade": qtd, "preco_venda": pv_card, "preco_mrr": converter_para_numero(linha.get('Preco_LOC_36', 0))})
-                                st.session_state["item_aberto"] = None; st.rerun()
-                        st.divider()
+                    def desenhar_card_produto(index, linha):
+                        is_aberto, nome_item_limpo, cat_limpa_card, cod_kme = st.session_state.get("item_aberto") == index, str(linha.get('Nome_Item', '')).strip(), str(linha.get('Categoria_Receita', '')).strip().lower(), str(linha.get('Codigo_KME', '')).strip()
+                        pv_card = converter_para_numero(linha.get('Preco_Venda', 0))
+                        
+                        if unidade_selecionada and ("obra" in cat_limpa_card or "instala" in cat_limpa_card) and not df_valor_ponto.empty:
+                            match_mo_card = df_valor_ponto[(df_valor_ponto['Unidade'].astype(str).str.strip() == unidade_selecionada) & (df_valor_ponto['Nome_Item'].astype(str).str.strip() == nome_item_limpo)]
+                            if not match_mo_card.empty:
+                                pv_card = converter_para_numero(match_mo_card.iloc[0]['Valor_MO'])
+                                if str(match_mo_card.iloc[0].get('Codigo', '')).strip() and str(match_mo_card.iloc[0].get('Codigo', '')).strip() != 'nan': cod_kme = str(match_mo_card.iloc[0].get('Codigo', '')).strip()
+                        
+                        if st.button(f"{'🔽' if is_aberto else '▶️'} {nome_item_limpo}{f' (Cód: {cod_kme})' if cod_kme else ''}", key=f"btn_acc_{index}", use_container_width=True): st.session_state["item_aberto"] = None if is_aberto else index; st.rerun()
+                        
+                        if is_aberto:
+                            with st.container():
+                                st.caption(f"**Grupo:** {linha.get('Grupo_Itens', 'N/A')} | **Categoria:** {linha.get('Categoria_Receita', '')}")
+                                c_qtd, c_add = st.columns([3, 7])
+                                qtd = c_qtd.number_input("Qtd", min_value=1, step=1, key=f"qtd_{index}")
+                                c_add.write(""); c_add.write("")
+                                if c_add.button("Adicionar ao Orçamento", key=f"btn_add_{index}", type="primary", use_container_width=True, disabled=(not unidade_selecionada)):
+                                    st.session_state["carrinho"].append({"nome": nome_item_limpo, "codigo": cod_kme, "tipo_sensor": str(linha.get('Tipo_Sensor', '')), "categoria": str(linha.get('Categoria_Receita', '')), "grupo": str(linha.get('Grupo_Itens', '')), "quantidade": qtd, "preco_venda": pv_card, "preco_mrr": converter_para_numero(linha.get('Preco_LOC_36', 0))})
+                                    st.session_state["item_aberto"] = None; st.rerun()
+                            st.divider()
 
-                def preencher_aba_grupo(df, nome_grupo):
-                    itens = df[df['Grupo_Itens'].fillna("").astype(str).str.strip().str.lower() == nome_grupo.lower()]
-                    with st.container(height=500):
-                        if itens.empty: st.info(f"Nenhum item em '{nome_grupo}'.")
-                        else:
-                            for index, linha in itens.iterrows(): desenhar_card_produto(index, linha)
-
-                with aba_servicos:
-                    grupos_serv = ["Servico Alarme", "Servico Imagem"]
-                    sub_abas_serv = st.tabs(grupos_serv + ["Outros"])
-                    for i, nome in enumerate(grupos_serv):
-                        with sub_abas_serv[i]: preencher_aba_grupo(df_produtos, nome)
-                    with sub_abas_serv[-1]:
-                        outros_serv = df_produtos[df_produtos['Categoria_Receita'].fillna("").astype(str).str.lower().str.contains("mensal|loca|servi|seguro") & ~df_produtos['Grupo_Itens'].fillna("").astype(str).str.strip().str.lower().isin([g.lower() for g in grupos_serv])]
+                    def preencher_aba_grupo(df, nome_grupo):
+                        itens = df[df['Grupo_Itens'].fillna("").astype(str).str.strip().str.lower() == nome_grupo.lower()]
                         with st.container(height=500):
-                            if not outros_serv.empty:
-                                for index, linha in outros_serv.iterrows(): desenhar_card_produto(index, linha)
+                            if itens.empty: st.info(f"Nenhum item em '{nome_grupo}'.")
+                            else:
+                                for index, linha in itens.iterrows(): desenhar_card_produto(index, linha)
 
-                with aba_produtos:
-                    grupos_prod = ["Smart Alarme", "JFL 8W", "AXPRO", "Detect IA", "CFTV"]
-                    sub_abas_prod = st.tabs(grupos_prod + ["Outros"])
-                    for i, nome in enumerate(grupos_prod):
-                        with sub_abas_prod[i]: preencher_aba_grupo(df_produtos, nome)
-                    with sub_abas_prod[-1]:
-                        outros_prod = df_produtos[~df_produtos['Categoria_Receita'].fillna("").astype(str).str.lower().str.contains("mensal|loca|servi|seguro|obra|instala") & ~df_produtos['Grupo_Itens'].fillna("").astype(str).str.strip().str.lower().isin([g.lower() for g in grupos_prod])]
+                    with aba_servicos:
+                        grupos_serv = ["Servico Alarme", "Servico Imagem"]
+                        sub_abas_serv = st.tabs(grupos_serv + ["Outros"])
+                        for i, nome in enumerate(grupos_serv):
+                            with sub_abas_serv[i]: preencher_aba_grupo(df_catalogo, nome)
+                        with sub_abas_serv[-1]:
+                            outros_serv = df_catalogo[df_catalogo['Categoria_Receita'].fillna("").astype(str).str.lower().str.contains("mensal|loca|servi|seguro") & ~df_catalogo['Grupo_Itens'].fillna("").astype(str).str.strip().str.lower().isin([g.lower() for g in grupos_serv])]
+                            with st.container(height=500):
+                                if not outros_serv.empty:
+                                    for index, linha in outros_serv.iterrows(): desenhar_card_produto(index, linha)
+
+                    with aba_produtos:
+                        grupos_prod = ["Smart Alarme", "JFL 8W", "AXPRO", "Detect IA", "CFTV"]
+                        sub_abas_prod = st.tabs(grupos_prod + ["Outros"])
+                        for i, nome in enumerate(grupos_prod):
+                            with sub_abas_prod[i]: preencher_aba_grupo(df_catalogo, nome)
+                        with sub_abas_prod[-1]:
+                            outros_prod = df_catalogo[~df_catalogo['Categoria_Receita'].fillna("").astype(str).str.lower().str.contains("mensal|loca|servi|seguro|obra|instala") & ~df_catalogo['Grupo_Itens'].fillna("").astype(str).str.strip().str.lower().isin([g.lower() for g in grupos_prod])]
+                            with st.container(height=500):
+                                if not outros_prod.empty:
+                                    for index, linha in outros_prod.iterrows(): desenhar_card_produto(index, linha)
+
+                    with aba_mao_obra:
+                        st.write("#### 🔹 Instalação e Configuração")
+                        itens_mo = df_catalogo[df_catalogo['Categoria_Receita'].fillna("").astype(str).str.lower().str.contains("obra|instala")]
                         with st.container(height=500):
-                            if not outros_prod.empty:
-                                for index, linha in outros_prod.iterrows(): desenhar_card_produto(index, linha)
-
-                with aba_mao_obra:
-                    st.write("#### 🔹 Instalação e Configuração")
-                    itens_mo = df_produtos[df_produtos['Categoria_Receita'].fillna("").astype(str).str.lower().str.contains("obra|instala")]
-                    with st.container(height=500):
-                        if not itens_mo.empty:
-                            for index, linha in itens_mo.iterrows(): desenhar_card_produto(index, linha)
+                            if not itens_mo.empty:
+                                for index, linha in itens_mo.iterrows(): desenhar_card_produto(index, linha)
 
             with col_resumo:
                 bruto_alarme, bruto_imagem, bruto_produtos, total_mao_obra = 0.0, 0.0, 0.0, 0.0
@@ -1586,7 +1602,6 @@ def tela_principal():
                             prop_sel = st.selectbox("Substituir carrinho atual por:", ["Selecione..."] + opcoes_copia, key="sel_copia_orc")
                             if prop_sel != "Selecione...":
                                 
-                                # FUNÇÃO CALLBACK PARA COPIAR DADOS ANTES DA TELA RECARREGAR
                                 def efetivar_copia():
                                     row_sel = idx_map[prop_sel]
                                     novo_carrinho = []
@@ -1606,7 +1621,6 @@ def tela_principal():
                                     st.session_state["desc_alarme"] = converter_para_numero(row_sel.get('Desc_Alarme', '0')) or None
                                     st.session_state["desc_imagem"] = converter_para_numero(row_sel.get('Desc_Imagem', '0')) or None
                                 
-                                # ACIONADOR DO CALLBACK
                                 if st.button("✔️ Confirmar Cópia", use_container_width=True, type="primary", on_click=efetivar_copia):
                                     st.toast("🛒 Orçamento copiado e preços atualizados com sucesso!")
                         else:
@@ -1626,13 +1640,12 @@ def tela_principal():
                     if st.button("⚙️ Consultar Crédito", use_container_width=True):
                         st.session_state["status_credito_deps"] = "Aprovado"
                         
-                        # --- INTEGRAÇÃO BRASILAPI / CÁLCULO DE IDADE E STATUS ---
                         doc_limpo = re.sub(r'\D', '', cpf_cnpj_lead)
                         tempo_str = "Não identificado"
                         situacao_str = "Não identificada"
                         
                         try:
-                            if len(doc_limpo) == 14: # CNPJ
+                            if len(doc_limpo) == 14:
                                 resp = requests.get(f"https://brasilapi.com.br/api/cnpj/v1/{doc_limpo}", timeout=5)
                                 if resp.status_code == 200:
                                     dados_cnpj = resp.json()
@@ -1644,7 +1657,7 @@ def tela_principal():
                                         anos = dias // 365
                                         meses = (dias % 365) // 30
                                         tempo_str = f"{anos} anos e {meses} meses"
-                            elif len(doc_limpo) == 11: # CPF
+                            elif len(doc_limpo) == 11:
                                 situacao_str = "N/A (Pessoa Física)"
                                 data_nasc = st.session_state["lead_dados"].get("data_nascimento", "")
                                 if data_nasc:
@@ -1716,27 +1729,26 @@ def tela_principal():
                     for a in avisos_projeto: st.write(f"- {a}")
                     if not st.checkbox("Estou ciente das inconsistências técnicas acima e confirmo o salvamento da proposta assim mesmo.", key="chk_override_regras"): pode_gravar = False
                 
-                if not unidade_selecionada or not nome_proposta.strip() or temperatura_escolhida == "Selecione..." or status_escolhido == "Selecione...":
+                if not unidade_selecionada or not nome_proposta.strip() or temperatura_escolhida == "Selecione..." or status_escolhido == "Selecione..." or segmento_escolhido == "Selecione...":
                     pode_gravar = False
                 
-                # --- MÁGICA CSS PARA DEIXAR O BOTÃO DE SALVAR VERDE ---
                 st.markdown('<p id="btn-salvar-orcamento"></p>', unsafe_allow_html=True)
                 st.markdown('''
                     <style>
                     div:has(> p#btn-salvar-orcamento) + div button:not(:disabled) {
-                        background-color: #10b981 !important; /* Verde Esmeralda */
+                        background-color: #10b981 !important;
                         color: white !important;
                         border-color: #10b981 !important;
                     }
                     div:has(> p#btn-salvar-orcamento) + div button:not(:disabled):hover {
-                        background-color: #059669 !important; /* Verde mais escuro no hover */
+                        background-color: #059669 !important;
                         border-color: #059669 !important;
                     }
                     </style>
                 ''', unsafe_allow_html=True)
                 
                 st.write("")
-                if st.button("💾 Salvar Orçamento", type="primary", disabled=not pode_gravar, use_container_width=True, help="Preencha o Nome da Proposta, Temperatura, Status e Unidade de Mão de Obra para habilitar"):
+                if st.button("💾 Salvar Orçamento", type="primary", disabled=not pode_gravar, use_container_width=True, help="Preencha o Nome da Proposta, Temperatura, Status, Segmento e Unidade de MO para habilitar"):
                     idx_editando = st.session_state.get("proposta_idx_editando")
                     if idx_editando: sucesso = atualizar_proposta_modificada(idx_editando, nome_proposta, total_mensal, total_setup, forma_limpa, parcela_escolhida, txt_parcela, st.session_state["carrinho"], val_desc_p, val_desc_a, val_desc_i, temperatura_escolhida, status_escolhido)
                     else: sucesso = salvar_proposta(st.session_state["lead_dados"].get("nome", ""), nome_proposta, st.session_state["nome_usuario"], st.session_state["email_usuario"], total_mensal, total_setup, forma_limpa, parcela_escolhida, txt_parcela, st.session_state["carrinho"], val_desc_p, val_desc_a, val_desc_i, temperatura_escolhida, status_escolhido)
@@ -1770,7 +1782,6 @@ def tela_principal():
                 st.write("---")
                 st.write("#### 📤 Ações da Proposta")
                 
-                # NOVO LAYOUT: 5 COLUNAS
                 c_gerar, c_email, c_wa, c_contrato, c_zapsign = st.columns(5)
                 
                 with c_gerar:
@@ -1795,7 +1806,6 @@ def tela_principal():
                         st.button("💬 Enviar p/ WhatsApp", disabled=True, help="Falta Telefone no cadastro do cliente.", use_container_width=True, type="primary")
                 
                 with c_contrato:
-                    # ATENÇÃO: Passando o st.session_state["carrinho"] na chamada!
                     docx_bytes, erro_docx = gerar_documento_contrato(st.session_state["lead_dados"], mrr_formatado, setup_txt, condicao_txt, st.session_state["carrinho"])
                     if docx_bytes:
                         if hasattr(st, "popover"):
