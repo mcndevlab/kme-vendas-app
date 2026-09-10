@@ -1439,46 +1439,46 @@ def tela_principal():
                     st.markdown('<p style="color:#d90429; font-size:0.85rem; margin-top:-10px; font-weight:600;">⚠️ Selecione o Segmento</p>', unsafe_allow_html=True)
 
             with c_copiar:
-                st.write("") 
-                st.write("")
-                if hasattr(st, "popover"): container_copia = st.popover("📋 Copiar Anterior", use_container_width=True)
-                else: container_copia = st.expander("📋 Copiar Anterior")
-                
-                with container_copia:
-                    df_prop_user = df_prop
-                    if not df_prop_user.empty:
-                        opcoes_copia = []
-                        idx_map = {}
-                        for i, r in df_prop_user.iterrows():
-                            texto_exibicao = f"{str(r.get('Nome_Cliente',''))[:15]} | {str(r.get('Nome_Proposta',''))[:15]} ({str(r.get('Data_Proposta','')).split(' ')[0]})"
-                            opcoes_copia.append(texto_exibicao)
-                            idx_map[texto_exibicao] = r
-                        
-                        prop_sel = st.selectbox("Substituir carrinho atual por:", ["Selecione..."] + opcoes_copia, key="sel_copia_orc_top")
-                        if prop_sel != "Selecione...":
-                            def efetivar_copia():
-                                row_sel = idx_map[prop_sel]
-                                novo_carrinho = []
-                                for item in str(row_sel.get('Itens_Orcamento', '')).split(";"):
-                                    if "x " in item:
-                                        try:
-                                            qtd = int(item.strip().split("x ", 1)[0])
-                                            nome_item = item.strip().split("x ", 1)[1].split("[Cód:")[0].strip() if "[Cód:" in item else item.strip().split("x ", 1)[1].strip()
-                                        except: qtd, nome_item = 0, ""
-                                        prod_info = df_produtos[df_produtos['Nome_Item'].astype(str).str.strip() == nome_item]
-                                        if not prod_info.empty:
-                                            prod = prod_info.iloc[0]
-                                            novo_carrinho.append({"nome": str(prod['Nome_Item']), "codigo": str(prod.get('Codigo_KME', '')), "tipo_sensor": str(prod.get('Tipo_Sensor', '')), "categoria": str(prod.get('Categoria_Receita', '')), "grupo": str(prod.get('Grupo_Itens', '')), "quantidade": qtd, "preco_venda": converter_para_numero(prod.get('Preco_Venda', 0)), "preco_mrr": converter_para_numero(prod.get('Preco_LOC_36', 0))})
-                                
-                                st.session_state["carrinho"] = novo_carrinho
-                                st.session_state["desc_prod"] = converter_para_numero(row_sel.get('Desc_Prod', '0')) or None
-                                st.session_state["desc_alarme"] = converter_para_numero(row_sel.get('Desc_Alarme', '0')) or None
-                                st.session_state["desc_imagem"] = converter_para_numero(row_sel.get('Desc_Imagem', '0')) or None
+                df_prop_user = df_prop
+                if not df_prop_user.empty:
+                    opcoes_copia = []
+                    idx_map = {}
+                    for i, r in df_prop_user.iterrows():
+                        texto_exibicao = f"{str(r.get('Nome_Cliente',''))[:15]} | {str(r.get('Nome_Proposta',''))[:15]} ({str(r.get('Data_Proposta','')).split(' ')[0]})"
+                        opcoes_copia.append(texto_exibicao)
+                        idx_map[texto_exibicao] = r
+                    
+                    # O selectbox substitui o botão e alinha perfeitamente com os outros campos
+                    prop_sel = st.selectbox("📋 Copiar Anterior", ["Selecione..."] + opcoes_copia, key="sel_copia_orc_top")
+                    
+                    if prop_sel != "Selecione...":
+                        def efetivar_copia():
+                            row_sel = idx_map[st.session_state["sel_copia_orc_top"]]
+                            novo_carrinho = []
+                            for item in str(row_sel.get('Itens_Orcamento', '')).split(";"):
+                                if "x " in item:
+                                    try:
+                                        qtd = int(item.strip().split("x ", 1)[0])
+                                        nome_item = item.strip().split("x ", 1)[1].split("[Cód:")[0].strip() if "[Cód:" in item else item.strip().split("x ", 1)[1].strip()
+                                    except: qtd, nome_item = 0, ""
+                                    prod_info = df_produtos[df_produtos['Nome_Item'].astype(str).str.strip() == nome_item]
+                                    if not prod_info.empty:
+                                        prod = prod_info.iloc[0]
+                                        novo_carrinho.append({"nome": str(prod['Nome_Item']), "codigo": str(prod.get('Codigo_KME', '')), "tipo_sensor": str(prod.get('Tipo_Sensor', '')), "categoria": str(prod.get('Categoria_Receita', '')), "grupo": str(prod.get('Grupo_Itens', '')), "quantidade": qtd, "preco_venda": converter_para_numero(prod.get('Preco_Venda', 0)), "preco_mrr": converter_para_numero(prod.get('Preco_LOC_36', 0))})
                             
-                            if st.button("✔️ Confirmar Cópia", use_container_width=True, type="primary", on_click=efetivar_copia):
-                                st.toast("🛒 Orçamento copiado e preços atualizados com sucesso!")
-                    else:
-                        st.info("Você ainda não possui orçamentos salvos.")
+                            st.session_state["carrinho"] = novo_carrinho
+                            st.session_state["desc_prod"] = converter_para_numero(row_sel.get('Desc_Prod', '0')) or None
+                            st.session_state["desc_alarme"] = converter_para_numero(row_sel.get('Desc_Alarme', '0')) or None
+                            st.session_state["desc_imagem"] = converter_para_numero(row_sel.get('Desc_Imagem', '0')) or None
+                            
+                            # Volta o campo para "Selecione..." automaticamente após a cópia
+                            st.session_state["sel_copia_orc_top"] = "Selecione..."
+                        
+                        # O botão de confirmar aparece fininho logo abaixo da caixa apenas quando uma opção for selecionada
+                        st.button("✔️ Confirmar Cópia", use_container_width=True, type="primary", on_click=efetivar_copia)
+                else:
+                    # Caso o usuário não tenha histórico, exibe a caixa desativada para manter o design alinhado
+                    st.selectbox("📋 Copiar Anterior", ["Sem histórico..."], disabled=True)
 
             st.divider()
 
