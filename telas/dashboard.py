@@ -45,7 +45,7 @@ def carregar_proposta_para_simulador(idx_planilha, dados_prop, df_produtos, df_l
     
     st.session_state["temp_proposta_atual"] = str(dados_prop.get('Temperatura', 'Selecione...'))
     st.session_state["status_proposta_atual"] = str(dados_prop.get('Status_Proposta', 'Selecione...'))
-    st.session_state["segmento_proposta_atual"] = "Selecione..." # O segmento sempre zera na edição para forçar o vendedor a carregar os itens corretos
+    st.session_state["segmento_proposta_atual"] = "Selecione..." 
     st.session_state["status_credito_deps"] = None
     st.session_state["tempo_empresa_credito"] = None
     st.session_state["situacao_cnpj"] = None
@@ -1395,7 +1395,8 @@ def tela_principal():
             lim_p, lim_a, lim_i = cfg.get("Desc_Max_Produtos", 15.0), cfg.get("Desc_Max_Alarme", 15.0), cfg.get("Desc_Max_Imagem", 30.0)
             unidades_disponiveis = sorted(list(set(df_valor_ponto['Unidade'].dropna().astype(str).str.strip()))) if not df_valor_ponto.empty and 'Unidade' in df_valor_ponto.columns else ["Padrão"]
 
-            c_nome, c_temp, c_status, c_unid, c_seg = st.columns([2.5, 1.5, 1.5, 2.5, 2])
+            c_nome, c_temp, c_status, c_unid, c_seg, c_copiar = st.columns([2.5, 1.5, 1.5, 2.0, 1.5, 2.0])
+            
             with c_nome:
                 nome_proposta = st.text_input("📝 Nome/Referência da Proposta (Ex: Matriz, Filial)", value=st.session_state.get("nome_proposta_atual", ""))
                 if not nome_proposta.strip():
@@ -1436,6 +1437,48 @@ def tela_principal():
                 
                 if segmento_escolhido == "Selecione...":
                     st.markdown('<p style="color:#d90429; font-size:0.85rem; margin-top:-10px; font-weight:600;">⚠️ Selecione o Segmento</p>', unsafe_allow_html=True)
+
+            with c_copiar:
+                st.write("") 
+                st.write("")
+                if hasattr(st, "popover"): container_copia = st.popover("📋 Copiar Anterior", use_container_width=True)
+                else: container_copia = st.expander("📋 Copiar Anterior")
+                
+                with container_copia:
+                    df_prop_user = df_prop
+                    if not df_prop_user.empty:
+                        opcoes_copia = []
+                        idx_map = {}
+                        for i, r in df_prop_user.iterrows():
+                            texto_exibicao = f"{str(r.get('Nome_Cliente',''))[:15]} | {str(r.get('Nome_Proposta',''))[:15]} ({str(r.get('Data_Proposta','')).split(' ')[0]})"
+                            opcoes_copia.append(texto_exibicao)
+                            idx_map[texto_exibicao] = r
+                        
+                        prop_sel = st.selectbox("Substituir carrinho atual por:", ["Selecione..."] + opcoes_copia, key="sel_copia_orc_top")
+                        if prop_sel != "Selecione...":
+                            def efetivar_copia():
+                                row_sel = idx_map[prop_sel]
+                                novo_carrinho = []
+                                for item in str(row_sel.get('Itens_Orcamento', '')).split(";"):
+                                    if "x " in item:
+                                        try:
+                                            qtd = int(item.strip().split("x ", 1)[0])
+                                            nome_item = item.strip().split("x ", 1)[1].split("[Cód:")[0].strip() if "[Cód:" in item else item.strip().split("x ", 1)[1].strip()
+                                        except: qtd, nome_item = 0, ""
+                                        prod_info = df_produtos[df_produtos['Nome_Item'].astype(str).str.strip() == nome_item]
+                                        if not prod_info.empty:
+                                            prod = prod_info.iloc[0]
+                                            novo_carrinho.append({"nome": str(prod['Nome_Item']), "codigo": str(prod.get('Codigo_KME', '')), "tipo_sensor": str(prod.get('Tipo_Sensor', '')), "categoria": str(prod.get('Categoria_Receita', '')), "grupo": str(prod.get('Grupo_Itens', '')), "quantidade": qtd, "preco_venda": converter_para_numero(prod.get('Preco_Venda', 0)), "preco_mrr": converter_para_numero(prod.get('Preco_LOC_36', 0))})
+                                
+                                st.session_state["carrinho"] = novo_carrinho
+                                st.session_state["desc_prod"] = converter_para_numero(row_sel.get('Desc_Prod', '0')) or None
+                                st.session_state["desc_alarme"] = converter_para_numero(row_sel.get('Desc_Alarme', '0')) or None
+                                st.session_state["desc_imagem"] = converter_para_numero(row_sel.get('Desc_Imagem', '0')) or None
+                            
+                            if st.button("✔️ Confirmar Cópia", use_container_width=True, type="primary", on_click=efetivar_copia):
+                                st.toast("🛒 Orçamento copiado e preços atualizados com sucesso!")
+                    else:
+                        st.info("Você ainda não possui orçamentos salvos.")
 
             st.divider()
 
@@ -1581,50 +1624,12 @@ def tela_principal():
                                 if st.button("❌", key=f"del_{i}"): st.session_state["carrinho"].pop(i); st.rerun()
                 
                 st.write("")
-                c_btn_limpar, c_btn_copiar = st.columns(2)
-                with c_btn_limpar:
-                    if len(st.session_state["carrinho"]) > 0:
-                        if st.button("🗑️ Limpar Carrinho", use_container_width=True): st.session_state["gatilho_limpar_carrinho"] = True; st.rerun()
-                with c_btn_copiar:
-                    if hasattr(st, "popover"): container_copia = st.popover("📋 Copiar Orçamento Anterior", use_container_width=True)
-                    else: container_copia = st.expander("📋 Copiar Orçamento Anterior")
-                    
-                    with container_copia:
-                        df_prop_user = df_prop
-                        if not df_prop_user.empty:
-                            opcoes_copia = []
-                            idx_map = {}
-                            for i, r in df_prop_user.iterrows():
-                                texto_exibicao = f"{str(r.get('Nome_Cliente',''))[:15]} | {str(r.get('Nome_Proposta',''))[:15]} ({str(r.get('Data_Proposta','')).split(' ')[0]})"
-                                opcoes_copia.append(texto_exibicao)
-                                idx_map[texto_exibicao] = r
-                            
-                            prop_sel = st.selectbox("Substituir carrinho atual por:", ["Selecione..."] + opcoes_copia, key="sel_copia_orc")
-                            if prop_sel != "Selecione...":
-                                
-                                def efetivar_copia():
-                                    row_sel = idx_map[prop_sel]
-                                    novo_carrinho = []
-                                    for item in str(row_sel.get('Itens_Orcamento', '')).split(";"):
-                                        if "x " in item:
-                                            try:
-                                                qtd = int(item.strip().split("x ", 1)[0])
-                                                nome_item = item.strip().split("x ", 1)[1].split("[Cód:")[0].strip() if "[Cód:" in item else item.strip().split("x ", 1)[1].strip()
-                                            except: qtd, nome_item = 0, ""
-                                            prod_info = df_produtos[df_produtos['Nome_Item'].astype(str).str.strip() == nome_item]
-                                            if not prod_info.empty:
-                                                prod = prod_info.iloc[0]
-                                                novo_carrinho.append({"nome": str(prod['Nome_Item']), "codigo": str(prod.get('Codigo_KME', '')), "tipo_sensor": str(prod.get('Tipo_Sensor', '')), "categoria": str(prod.get('Categoria_Receita', '')), "grupo": str(prod.get('Grupo_Itens', '')), "quantidade": qtd, "preco_venda": converter_para_numero(prod.get('Preco_Venda', 0)), "preco_mrr": converter_para_numero(prod.get('Preco_LOC_36', 0))})
-                                    
-                                    st.session_state["carrinho"] = novo_carrinho
-                                    st.session_state["desc_prod"] = converter_para_numero(row_sel.get('Desc_Prod', '0')) or None
-                                    st.session_state["desc_alarme"] = converter_para_numero(row_sel.get('Desc_Alarme', '0')) or None
-                                    st.session_state["desc_imagem"] = converter_para_numero(row_sel.get('Desc_Imagem', '0')) or None
-                                
-                                if st.button("✔️ Confirmar Cópia", use_container_width=True, type="primary", on_click=efetivar_copia):
-                                    st.toast("🛒 Orçamento copiado e preços atualizados com sucesso!")
-                        else:
-                            st.info("Você ainda não possui orçamentos salvos.")
+                if len(st.session_state["carrinho"]) > 0:
+                    c_vazio_carrinho, c_btn_limpar = st.columns([7, 3])
+                    with c_btn_limpar:
+                        if st.button("🗑️ Limpar Carrinho", use_container_width=True): 
+                            st.session_state["gatilho_limpar_carrinho"] = True
+                            st.rerun()
 
             st.divider()
             
