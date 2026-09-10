@@ -1449,7 +1449,7 @@ def tela_principal():
                         idx_map[texto_exibicao] = r
                     
                     # O selectbox substitui o botão e alinha perfeitamente com os outros campos
-                    prop_sel = st.selectbox("📋 Copiar Anterior", ["Selecione..."] + opcoes_copia, key="sel_copia_orc_top")
+                    prop_sel = st.selectbox("📋 Copiar Orçamento Anterior", ["Selecione..."] + opcoes_copia, key="sel_copia_orc_top")
                     
                     if prop_sel != "Selecione...":
                         def efetivar_copia():
@@ -1478,7 +1478,7 @@ def tela_principal():
                         st.button("✔️ Confirmar Cópia", use_container_width=True, type="primary", on_click=efetivar_copia)
                 else:
                     # Caso o usuário não tenha histórico, exibe a caixa desativada para manter o design alinhado
-                    st.selectbox("📋 Copiar Anterior", ["Sem histórico..."], disabled=True)
+                    st.selectbox("📋 Copiar Orçamento Anterior", ["Sem histórico..."], disabled=True)
 
             st.divider()
 
