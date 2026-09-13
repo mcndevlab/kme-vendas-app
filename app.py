@@ -1,18 +1,14 @@
 import streamlit as st
 from telas.login import tela_login, tela_trocar_senha
 from telas.dashboard import tela_principal
-from modulos.db import (carregar_usuarios, registrar_atividade)
+from modulos.db import registrar_atividade
 
-# Só registra a atividade se o usuário já estiver logado no sistema
-if st.session_state.get("email_usuario"):
-    registrar_atividade(st.session_state["email_usuario"])
-
-# 1. Configuração da página (Ícone com a Logo e Menu Lateral forçado para iniciar aberto)
+# 1. Configuração da página
 st.set_page_config(
-    page_title="Khronos Sales", 
-    page_icon="logo.jpg",   
+    page_title="Khronos Sales",
+    page_icon="logo.jpg",
     layout="wide",
-    initial_sidebar_state="expanded" # <-- Este é o comando que força o menu a abrir
+    initial_sidebar_state="expanded"
 )
 
 # 2. Estilização CSS Padrão
@@ -31,40 +27,53 @@ st.markdown("""
 # 3. Criação da Memória Inicial
 if "autenticado" not in st.session_state:
     st.session_state.update({
-        "autenticado": False, 
-        "nome_usuario": "", 
-        "email_usuario": "", 
-        "perfil_usuario": "Consultor", 
-        "unidade_usuario": "", 
-        "vertical_usuario": "", 
-        "carrinho": [], 
-        "desc_prod": 0.0, 
-        "desc_alarme": 0.0, 
-        "desc_imagem": 0.0, 
-        "etapa_atual": "lead",  # <-- Voltou para abrir direto no Cadastro do Cliente
-        "lead_dados": {}, 
-        "lead_salvo": False, 
-        "msg_sucesso": "", 
-        "renovar_proposta_idx": None, 
-        "renovar_proposta_dados": {}, 
-        "proposta_idx_editando": None, 
-        "editando_lead_idx": None, 
-        "nome_proposta_atual": "", 
-        "temp_proposta_atual": "Selecione...", 
-        "status_proposta_atual": "Selecione...", 
+        "autenticado": False,
+        "empresa_id": None,          # <-- chave do isolamento multiempresa
+        "nome_usuario": "",
+        "email_usuario": "",
+        "perfil_usuario": "Consultor",
+        "unidade_usuario": "",
+        "vertical_usuario": "",
+        "carrinho": [],
+        "desc_prod": 0.0,
+        "desc_alarme": 0.0,
+        "desc_imagem": 0.0,
+        "etapa_atual": "lead",
+        "lead_dados": {},
+        "lead_salvo": False,
+        "msg_sucesso": "",
+        "renovar_proposta_idx": None,
+        "renovar_proposta_dados": {},
+        "proposta_idx_editando": None,
+        "editando_lead_idx": None,
+        "nome_proposta_atual": "",
+        "temp_proposta_atual": "Selecione...",
+        "status_proposta_atual": "Selecione...",
         "status_credito_deps": None,
-        "ultimo_gps_capturado": "", 
-        "item_aberto": None, 
-        "unidade_mo_selecionada": None, 
-        "modo_visao_leads": "📱 Cartões (Celular)", 
-        "modo_visao_propostas": "📱 Cartões (Celular)", 
-        "precisa_trocar_senha": False
+        "ultimo_gps_capturado": "",
+        "item_aberto": None,
+        "unidade_mo_selecionada": None,
+        "modo_visao_leads": "📱 Cartões (Celular)",
+        "modo_visao_propostas": "📱 Cartões (Celular)",
+        "precisa_trocar_senha": False,
+        "ultimo_ping": None
     })
 
+# 3.1 Registro de atividade
+# Antes isso gravava no banco a CADA rerun (ou seja, a cada clique).
+# Agora grava no máximo uma vez a cada 10 minutos por sessão.
+import datetime
+if st.session_state.get("autenticado") and st.session_state.get("email_usuario"):
+    agora = datetime.datetime.now()
+    ultimo = st.session_state.get("ultimo_ping")
+    if ultimo is None or (agora - ultimo).total_seconds() > 600:
+        registrar_atividade(st.session_state["email_usuario"])
+        st.session_state["ultimo_ping"] = agora
+
 # 4. Roteamento de Telas
-if not st.session_state.get("autenticado", False): 
+if not st.session_state.get("autenticado", False):
     tela_login()
 elif st.session_state.get("precisa_trocar_senha", False):
     tela_trocar_senha()
-else: 
+else:
     tela_principal()
