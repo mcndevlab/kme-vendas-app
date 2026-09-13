@@ -46,6 +46,10 @@ def tela_login():
                                     "vertical_usuario": str(user.get('vertical', '')).strip(),
                                     "precisa_trocar_senha": str(user.get('trocar_senha', 'Nao')).strip().upper() == 'SIM'
                                 })
+                                
+                                from modulos.db import registrar_atividade
+                                registrar_atividade(user['email_c'])
+                                
                                 st.rerun()
                             else:
                                 st.error("⚠️ E-mail ou senha incorretos.")
