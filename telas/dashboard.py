@@ -27,34 +27,34 @@ from modulos.utils import (padronizar_nome, padronizar_telefone, extrair_tabela_
 
 def carregar_proposta_para_simulador(idx_planilha, dados_prop, df_produtos, df_leads):
     novo_carrinho = []
-    for item in str(dados_prop.get('Itens_Orcamento', '')).split(";"):
+    for item in str(dados_prop.get('itens_orcamento', '')).split(";"):
         if "x " in item:
             try:
                 qtd = int(item.strip().split("x ", 1)[0])
                 nome_item = item.strip().split("x ", 1)[1].split("[Cód:")[0].strip() if "[Cód:" in item else item.strip().split("x ", 1)[1].strip()
             except: qtd, nome_item = 0, ""
-            prod_info = df_produtos[df_produtos['Nome_Item'].astype(str).str.strip() == nome_item]
+            prod_info = df_produtos[df_produtos['nome_item'].astype(str).str.strip() == nome_item]
             if not prod_info.empty:
                 prod = prod_info.iloc[0]
-                novo_carrinho.append({"nome": str(prod['Nome_Item']), "codigo": str(prod.get('Codigo_KME', '')), "tipo_sensor": str(prod.get('Tipo_Sensor', '')), "categoria": str(prod.get('Categoria_Receita', '')), "grupo": str(prod.get('Grupo_Itens', '')), "quantidade": qtd, "preco_venda": converter_para_numero(prod.get('Preco_Venda', 0)), "preco_mrr": converter_para_numero(prod.get('Preco_LOC_36', 0))})
+                novo_carrinho.append({"nome": str(prod['nome_item']), "codigo": str(prod.get('codigo_kme', '')), "tipo_sensor": str(prod.get('tipo_sensor', '')), "categoria": str(prod.get('categoria_receita', '')), "grupo": str(prod.get('grupo_itens', '')), "quantidade": qtd, "preco_venda": converter_para_numero(prod.get('preco_venda', 0)), "preco_mrr": converter_para_numero(prod.get('preco_loc_36', 0))})
                 
-    st.session_state["desc_prod"] = converter_para_numero(dados_prop.get('Desc_Prod', '0')) or None
-    st.session_state["desc_alarme"] = converter_para_numero(dados_prop.get('Desc_Alarme', '0')) or None
-    st.session_state["desc_imagem"] = converter_para_numero(dados_prop.get('Desc_Imagem', '0')) or None
-    st.session_state["nome_proposta_atual"] = str(dados_prop.get('Nome_Proposta', ''))
+    st.session_state["desc_prod"] = converter_para_numero(dados_prop.get('desc_prod', '0')) or None
+    st.session_state["desc_alarme"] = converter_para_numero(dados_prop.get('desc_alarme', '0')) or None
+    st.session_state["desc_imagem"] = converter_para_numero(dados_prop.get('desc_imagem', '0')) or None
+    st.session_state["nome_proposta_atual"] = str(dados_prop.get('nome_proposta', ''))
     
-    st.session_state["temp_proposta_atual"] = str(dados_prop.get('Temperatura', 'Selecione...'))
-    st.session_state["status_proposta_atual"] = str(dados_prop.get('Status_Proposta', 'Selecione...'))
+    st.session_state["temp_proposta_atual"] = str(dados_prop.get('temperatura', 'Selecione...'))
+    st.session_state["status_proposta_atual"] = str(dados_prop.get('status_proposta', 'Selecione...'))
     st.session_state["segmento_proposta_atual"] = "Selecione..." 
     st.session_state["status_credito_deps"] = None
     st.session_state["tempo_empresa_credito"] = None
     st.session_state["situacao_cnpj"] = None
     
-    nome_cliente = str(dados_prop.get('Nome_Cliente', '')).strip()
-    lead_row = df_leads[df_leads['Nome_Razao'].astype(str).str.strip() == nome_cliente]
+    nome_cliente = str(dados_prop.get('nome_cliente', '')).strip()
+    lead_row = df_leads[df_leads['nome_razao'].astype(str).str.strip() == nome_cliente]
     if not lead_row.empty:
         lr = lead_row.iloc[0]
-        st.session_state["lead_dados"] = {"data_cadastro": str(lr.get("Data_Cadastro", "")), "nome": str(lr.get("Nome_Razao", "")), "cpf_cnpj": str(lr.get("CPF_CNPJ", "")).replace('nan', ''), "data_nascimento": str(lr.get("Data_Nascimento", "")).replace('nan', ''), "endereco": str(lr.get("Endereco", "")).replace('nan', ''), "numero": str(lr.get("Numero", "")).replace('nan', ''), "cidade": str(lr.get("Cidade", "")).replace('nan', ''), "estado": str(lr.get("Estado", "")).replace('nan', ''), "telefone": str(lr.get("Telefone", "")).replace('nan', ''), "contato": str(lr.get("Contato", "")).replace('nan', ''), "email_cliente": str(lr.get("Email_Cliente", "")).replace('nan', ''), "gps": str(lr.get("Coordenadas_GPS", "")).replace('nan', '')}
+        st.session_state["lead_dados"] = {"data_cadastro": str(lr.get("data_cadastro", "")), "nome": str(lr.get("nome_razao", "")), "cpf_cnpj": str(lr.get("cpf_cnpj", "")).replace('nan', ''), "data_nascimento": str(lr.get("data_nascimento", "")).replace('nan', ''), "endereco": str(lr.get("endereco", "")).replace('nan', ''), "numero": str(lr.get("numero", "")).replace('nan', ''), "cidade": str(lr.get("cidade", "")).replace('nan', ''), "estado": str(lr.get("estado", "")).replace('nan', ''), "telefone": str(lr.get("telefone", "")).replace('nan', ''), "contato": str(lr.get("contato", "")).replace('nan', ''), "email_cliente": str(lr.get("email_cliente", "")).replace('nan', ''), "gps": str(lr.get("coordenadas_gps", "")).replace('nan', '')}
         st.session_state["editando_lead_idx"] = lead_row.index[0] + 2 
     else:
         st.session_state["lead_dados"] = {"nome": nome_cliente}
@@ -63,9 +63,9 @@ def carregar_proposta_para_simulador(idx_planilha, dados_prop, df_produtos, df_l
     st.session_state.update({"carrinho": novo_carrinho, "lead_salvo": True, "renovar_proposta_idx": None, "proposta_idx_editando": idx_planilha, "etapa_atual": "simulador"})
 
 def aplicar_filtros_gerenciais(df_users, df_all_leads, df_all_prop, perfil, minha_unidade):
-    if perfil == "Lider": df_users = df_users[df_users['Unidade'].astype(str).str.strip().str.lower() == minha_unidade]
-    elif perfil == "Gerente_Varejo": df_users = df_users[df_users['Vertical'].astype(str).str.strip().str.lower().str.contains('varejo')]
-    elif perfil == "Gerente_Condominio": df_users = df_users[df_users['Vertical'].astype(str).str.strip().str.lower().str.contains('condominio')]
+    if perfil == "Lider": df_users = df_users[df_users['unidade'].astype(str).str.strip().str.lower() == minha_unidade]
+    elif perfil == "Gerente_Varejo": df_users = df_users[df_users['vertical'].astype(str).str.strip().str.lower().str.contains('varejo')]
+    elif perfil == "Gerente_Condominio": df_users = df_users[df_users['vertical'].astype(str).str.strip().str.lower().str.contains('condominio')]
     
     st.write("---")
     num_cols = 4 
@@ -77,74 +77,74 @@ def aplicar_filtros_gerenciais(df_users, df_all_leads, df_all_prop, perfil, minh
     
     filtro_vert = "Todas"
     if perfil == "Diretoria":
-        opcoes_vert = ["Todas"] + sorted(df_users['Vertical'].dropna().unique().tolist())
+        opcoes_vert = ["Todas"] + sorted(df_users['vertical'].dropna().unique().tolist())
         filtro_vert = cols[idx].selectbox("Vertical", opcoes_vert)
-        if filtro_vert != "Todas": df_users = df_users[df_users['Vertical'] == filtro_vert]
+        if filtro_vert != "Todas": df_users = df_users[df_users['vertical'] == filtro_vert]
         idx += 1
             
     filtro_unid = "Todas"
     if perfil in ["Diretoria", "Gerente_Varejo", "Gerente_Condominio"]:
-        opcoes_unid = ["Todas"] + sorted(df_users['Unidade'].dropna().unique().tolist())
+        opcoes_unid = ["Todas"] + sorted(df_users['unidade'].dropna().unique().tolist())
         filtro_unid = cols[idx].selectbox("Unidade", opcoes_unid)
-        if filtro_unid != "Todas": df_users = df_users[df_users['Unidade'] == filtro_unid]
+        if filtro_unid != "Todas": df_users = df_users[df_users['unidade'] == filtro_unid]
         idx += 1
             
-    opcoes_vend = ["Todos"] + sorted(df_users['Nome'].dropna().unique().tolist())
+    opcoes_vend = ["Todos"] + sorted(df_users['nome'].dropna().unique().tolist())
     filtro_vend = cols[idx].selectbox("Vendedor", opcoes_vend)
-    if filtro_vend != "Todos": df_users = df_users[df_users['Nome'] == filtro_vend]
+    if filtro_vend != "Todos": df_users = df_users[df_users['nome'] == filtro_vend]
     idx += 1
     
-    valid_em = df_users['Email_C'].tolist()
-    df_eq_l = df_all_leads[df_all_leads['Email_Vendedor'].isin(valid_em)] if not df_all_leads.empty else pd.DataFrame()
-    df_eq_p = df_all_prop[df_all_prop['Email_Vendedor'].isin(valid_em)] if not df_all_prop.empty else pd.DataFrame()
+    valid_em = df_users['email_c'].tolist()
+    df_eq_l = df_all_leads[df_all_leads['email_vendedor'].isin(valid_em)] if not df_all_leads.empty else pd.DataFrame()
+    df_eq_p = df_all_prop[df_all_prop['email_vendedor'].isin(valid_em)] if not df_all_prop.empty else pd.DataFrame()
     
     if not df_eq_l.empty:
-        df_eq_l['Data_Fmt'] = pd.to_datetime(df_eq_l['Data_Cadastro'].astype(str).str.split(" ").str[0], format='%d/%m/%Y', errors='coerce')
-        df_eq_l['Mes_Ano'] = df_eq_l['Data_Fmt'].dt.strftime('%m/%Y').fillna('Sem Data')
-        df_eq_l['Dia_Str'] = df_eq_l['Data_Fmt'].dt.strftime('%d/%m/%Y').fillna('Sem Data')
+        df_eq_l['data_fmt'] = pd.to_datetime(df_eq_l['data_cadastro'].astype(str).str.split(" ").str[0], format='%d/%m/%Y', errors='coerce')
+        df_eq_l['mes_ano'] = df_eq_l['data_fmt'].dt.strftime('%m/%Y').fillna('Sem Data')
+        df_eq_l['dia_str'] = df_eq_l['data_fmt'].dt.strftime('%d/%m/%Y').fillna('Sem Data')
     if not df_eq_p.empty:
-        df_eq_p['Data_Fmt'] = pd.to_datetime(df_eq_p['Data_Proposta'].astype(str).str.split(" ").str[0], format='%d/%m/%Y', errors='coerce')
-        df_eq_p['Mes_Ano'] = df_eq_p['Data_Fmt'].dt.strftime('%m/%Y').fillna('Sem Data')
-        df_eq_p['Dia_Str'] = df_eq_p['Data_Fmt'].dt.strftime('%d/%m/%Y').fillna('Sem Data')
+        df_eq_p['data_fmt'] = pd.to_datetime(df_eq_p['data_proposta'].astype(str).str.split(" ").str[0], format='%d/%m/%Y', errors='coerce')
+        df_eq_p['mes_ano'] = df_eq_p['data_fmt'].dt.strftime('%m/%Y').fillna('Sem Data')
+        df_eq_p['dia_str'] = df_eq_p['data_fmt'].dt.strftime('%d/%m/%Y').fillna('Sem Data')
         
     meses_d = []
-    if not df_eq_l.empty: meses_d.extend(df_eq_l['Mes_Ano'].dropna().unique().tolist())
-    if not df_eq_p.empty: meses_d.extend(df_eq_p['Mes_Ano'].dropna().unique().tolist())
+    if not df_eq_l.empty: meses_d.extend(df_eq_l['mes_ano'].dropna().unique().tolist())
+    if not df_eq_p.empty: meses_d.extend(df_eq_p['mes_ano'].dropna().unique().tolist())
     meses_d = sorted(list(set(meses_d)))
     if 'Sem Data' in meses_d: meses_d.remove('Sem Data')
     meses_d = ["Todos"] + meses_d
     
     filtro_mes = cols[idx].selectbox("Mês", meses_d)
     if filtro_mes != "Todos":
-        if not df_eq_l.empty: df_eq_l = df_eq_l[df_eq_l['Mes_Ano'] == filtro_mes]
-        if not df_eq_p.empty: df_eq_p = df_eq_p[df_eq_p['Mes_Ano'] == filtro_mes]
+        if not df_eq_l.empty: df_eq_l = df_eq_l[df_eq_l['mes_ano'] == filtro_mes]
+        if not df_eq_p.empty: df_eq_p = df_eq_p[df_eq_p['mes_ano'] == filtro_mes]
     idx += 1
         
     dias_d = []
-    if not df_eq_l.empty: dias_d.extend(df_eq_l['Dia_Str'].dropna().unique().tolist())
-    if not df_eq_p.empty: dias_d.extend(df_eq_p['Dia_Str'].dropna().unique().tolist())
+    if not df_eq_l.empty: dias_d.extend(df_eq_l['dia_str'].dropna().unique().tolist())
+    if not df_eq_p.empty: dias_d.extend(df_eq_p['dia_str'].dropna().unique().tolist())
     dias_d = sorted(list(set(dias_d)))
     if 'Sem Data' in dias_d: dias_d.remove('Sem Data')
     dias_d = ["Todos"] + dias_d
     
     filtro_dia = cols[idx].selectbox("Dia", dias_d)
     if filtro_dia != "Todos":
-        if not df_eq_l.empty: df_eq_l = df_eq_l[df_eq_l['Dia_Str'] == filtro_dia]
-        if not df_eq_p.empty: df_eq_p = df_eq_p[df_eq_p['Dia_Str'] == filtro_dia]
+        if not df_eq_l.empty: df_eq_l = df_eq_l[df_eq_l['dia_str'] == filtro_dia]
+        if not df_eq_p.empty: df_eq_p = df_eq_p[df_eq_p['dia_str'] == filtro_dia]
     idx += 1
     
     temp_d = []
-    if not df_eq_p.empty and 'Temperatura' in df_eq_p.columns:
-        temp_d.extend([str(t).strip() for t in df_eq_p['Temperatura'].dropna().unique().tolist() if str(t).strip() != ''])
+    if not df_eq_p.empty and 'temperatura' in df_eq_p.columns:
+        temp_d.extend([str(t).strip() for t in df_eq_p['temperatura'].dropna().unique().tolist() if str(t).strip() != ''])
     temp_d = sorted(list(set(temp_d)))
     temp_d = ["Todas"] + temp_d
     
     if idx < num_cols:
         filtro_temp = cols[idx].selectbox("Temp. Proposta", temp_d)
         if filtro_temp != "Todas" and not df_eq_p.empty:
-            df_eq_p = df_eq_p[df_eq_p['Temperatura'].astype(str).str.strip() == filtro_temp]
+            df_eq_p = df_eq_p[df_eq_p['temperatura'].astype(str).str.strip() == filtro_temp]
 
-    mapa_v = dict(zip(df_users['Email_C'], df_users['Nome']))
+    mapa_v = dict(zip(df_users['email_c'], df_users['nome']))
     dicionario_filtros = {"vertical": filtro_vert, "mes": filtro_mes, "dia": filtro_dia}
     return df_eq_l, df_eq_p, mapa_v, dicionario_filtros
 
@@ -152,10 +152,10 @@ def tela_principal():
     cfg = carregar_configuracoes()
     vertical_user = str(st.session_state.get('vertical_usuario', '')).strip().lower()
     
-    if "varejo" in vertical_user: limite_vencimento, limite_temp = int(cfg.get("Venc_Proposta_Varejo", 10)), int(cfg.get("Temp_Proposta_Varejo", 5))
-    elif "condominio" in vertical_user: limite_vencimento, limite_temp = int(cfg.get("Venc_Proposta_Cond", 10)), int(cfg.get("Temp_Proposta_Cond", 5))
-    elif "grandes_contas" in vertical_user or "gc" in vertical_user: limite_vencimento, limite_temp = int(cfg.get("Venc_Proposta_GC", 10)), int(cfg.get("Temp_Proposta_GC", 5))
-    else: limite_vencimento, limite_temp = int(cfg.get("Venc_Proposta", 10)), int(cfg.get("Temp_Proposta", 5))
+    if "varejo" in vertical_user: limite_vencimento, limite_temp = int(cfg.get("venc_proposta_varejo", 10)), int(cfg.get("temp_proposta_varejo", 5))
+    elif "condominio" in vertical_user: limite_vencimento, limite_temp = int(cfg.get("venc_proposta_cond", 10)), int(cfg.get("temp_proposta_cond", 5))
+    elif "grandes_contas" in vertical_user or "gc" in vertical_user: limite_vencimento, limite_temp = int(cfg.get("venc_proposta_gc", 10)), int(cfg.get("temp_proposta_gc", 5))
+    else: limite_vencimento, limite_temp = int(cfg.get("venc_proposta", 10)), int(cfg.get("temp_proposta", 5))
 
     df_produtos = carregar_produtos()
     df_valor_sensor = carregar_valores_sensores()
@@ -168,14 +168,14 @@ def tela_principal():
     if not df_prop.empty:
         hoje = datetime.datetime.now()
         for idx, row in df_prop.iterrows():
-            status = str(row.get('Status_Proposta', '')).strip()
+            status = str(row.get('status_proposta', '')).strip()
             if status in ["Perdida", "Fechada", "Aprovada"]: continue
             
-            prop_renovada = str(row.get('Data_Proposta_Renovada', '')).replace('nan', '').replace('None', '').strip()
-            data_ref_prop_str = prop_renovada if prop_renovada else str(row.get('Data_Proposta', '')).replace('nan', '').replace('None', '').strip()
+            prop_renovada = str(row.get('data_proposta_renovada', '')).replace('nan', '').replace('None', '').strip()
+            data_ref_prop_str = prop_renovada if prop_renovada else str(row.get('data_proposta', '')).replace('nan', '').replace('None', '').strip()
             
-            temp_renovada = str(row.get('Data_Temperatura_Renovada', '')).replace('nan', '').replace('None', '').strip()
-            data_ref_temp_str = temp_renovada if temp_renovada else str(row.get('Data_Proposta', '')).replace('nan', '').replace('None', '').strip()
+            temp_renovada = str(row.get('data_temperatura_renovada', '')).replace('nan', '').replace('None', '').strip()
+            data_ref_temp_str = temp_renovada if temp_renovada else str(row.get('data_proposta', '')).replace('nan', '').replace('None', '').strip()
             
             try:
                 data_ref_prop = datetime.datetime.strptime(data_ref_prop_str, "%d/%m/%Y %H:%M:%S") if " " in data_ref_prop_str else datetime.datetime.strptime(data_ref_prop_str, "%d/%m/%Y")
@@ -199,7 +199,7 @@ def tela_principal():
         st.write("---")
         for p in propostas_vencidas:
             with st.container():
-                st.markdown(f"### 💼 Cliente: {p['dados'].get('Nome_Cliente', '')} *(Ref: {p['dados'].get('Nome_Proposta', '')})*")
+                st.markdown(f"### 💼 Cliente: {p['dados'].get('nome_cliente', '')} *(Ref: {p['dados'].get('nome_proposta', '')})*")
                 
                 if p['vencida_prop']: 
                     st.caption(f"🚨 **Proposta Vencida** há {p['dias_prop']} dias. (Limite: {limite_vencimento}d)")
@@ -228,7 +228,7 @@ def tela_principal():
                             if efetivar_aprovacao(p['idx_planilha']):
                                 mrr_fmt, eqp_fmt, mo_fmt = obter_detalhes_split(p['dados'], df_produtos, df_valor_sensor, df_valor_ponto, st.session_state['unidade_usuario'])
                                 df_us = carregar_usuarios()
-                                df_us['Email_C'] = df_us['Email'].astype(str).str.strip().str.lower()
+                                df_us['email_c'] = df_us['email'].astype(str).str.strip().str.lower()
                                 emails_destino = obter_emails_gestores(df_us, st.session_state['unidade_usuario'], st.session_state['vertical_usuario'])
                                 if emails_destino:
                                     enviar_email_aprovacao(st.session_state['nome_usuario'], st.session_state['unidade_usuario'], st.session_state['vertical_usuario'], mrr_fmt, eqp_fmt, mo_fmt, emails_destino)
@@ -241,7 +241,7 @@ def tela_principal():
                                 
                     elif acao == "Renovar Proposta e Temperatura":
                         mrr_n, setup_n = calcular_novos_valores_proposta(p['dados'], df_produtos, df_valor_sensor)
-                        mrr_a, setup_a = p['dados'].get('Total_MRR', ''), p['dados'].get('Total_Setup', '')
+                        mrr_a, setup_a = p['dados'].get('total_mrr', ''), p['dados'].get('total_setup', '')
                         pode_salvar = True
                         if mrr_n != mrr_a or setup_n != setup_a:
                             st.markdown(f"""
@@ -267,10 +267,10 @@ def tela_principal():
     # --- VERIFICAÇÃO SE O USUÁRIO É ADMINISTRADOR ---
     df_users_chk = carregar_usuarios()
     is_admin = False
-    if not df_users_chk.empty and 'Perfil_Acesso' in df_users_chk.columns:
-        user_info = df_users_chk[df_users_chk['Email'].astype(str).str.lower().str.strip() == st.session_state['email_usuario'].lower().strip()]
+    if not df_users_chk.empty and 'perfil_acesso' in df_users_chk.columns:
+        user_info = df_users_chk[df_users_chk['email'].astype(str).str.lower().str.strip() == st.session_state['email_usuario'].lower().strip()]
         if not user_info.empty:
-            perfil_acc = str(user_info.iloc[0].get('Perfil_Acesso', '')).strip().lower()
+            perfil_acc = str(user_info.iloc[0].get('perfil_acesso', '')).strip().lower()
             if perfil_acc == 'administrador':
                 is_admin = True
 
@@ -312,7 +312,7 @@ def tela_principal():
             "lead_dados": {}, "lead_salvo": False, "renovar_proposta_idx": None, 
             "proposta_idx_editando": None, "editando_lead_idx": None, "nome_proposta_atual": "", 
             "temp_proposta_atual": "Selecione...", "status_proposta_atual": "Selecione...", 
-            "segmento_proposta_atual": "Selecione...", # Zera o segmento
+            "segmento_proposta_atual": "Selecione...",
             "status_credito_deps": None, "tempo_empresa_credito": None, "situacao_cnpj": None,
             "ultimo_gps_capturado": "", "item_aberto": None, "unidade_mo_selecionada": None, 
             "gatilho_limpar_tudo": False
@@ -337,16 +337,16 @@ def tela_principal():
             df_configs = carregar_tabela_configuracoes()
             
             if df_configs.empty:
-                st.info("Nenhuma configuração encontrada na tabela 'Configuracoes'.")
+                st.info("Nenhuma configuração encontrada na tabela 'configuracoes'.")
             else:
-                col_desc = 'Descricao' if 'Descricao' in df_configs.columns else ('Descrição' if 'Descrição' in df_configs.columns else None)
+                col_desc = 'descricao' if 'descricao' in df_configs.columns else ('descrição' if 'descrição' in df_configs.columns else None)
                 
                 with st.form("form_configs"):
                     novos_valores = {}
                     
                     for idx, row in df_configs.iterrows():
-                        param = str(row.get('Parametro', ''))
-                        val = str(row.get('Valor', ''))
+                        param = str(row.get('parametro', ''))
+                        val = str(row.get('valor', ''))
                         desc = str(row[col_desc]) if col_desc and not pd.isna(row.get(col_desc)) else ""
                         
                         st.markdown(f"**{param}**")
@@ -361,7 +361,7 @@ def tela_principal():
                         sucesso_geral = True
                         
                         for p, v in novos_valores.items():
-                            val_antigo = str(df_configs[df_configs['Parametro'] == p]['Valor'].values[0])
+                            val_antigo = str(df_configs[df_configs['parametro'] == p]['valor'].values[0])
                             if v != val_antigo:
                                 if not atualizar_valor_configuracao(p, v):
                                     sucesso_geral = False
@@ -404,15 +404,15 @@ def tela_principal():
                             st.error("⚠️ Nome, E-mail e Senha são campos obrigatórios!")
                         else:
                             dados_novo = {
-                                "Nome": novo_nome, 
-                                "Email": str(novo_email).lower().strip(), 
-                                "Senha": nova_senha, 
-                                "Perfil": novo_perfil, 
-                                "Unidade": nova_unidade,
-                                "Vertical": nova_vertical, 
-                                "Status": novo_status, 
-                                "Login_CRM": novo_login_crm,
-                                "Perfil_Acesso": novo_perfil_acesso
+                                "nome": novo_nome, 
+                                "email": str(novo_email).lower().strip(), 
+                                "senha": nova_senha, 
+                                "perfil": novo_perfil, 
+                                "unidade": nova_unidade,
+                                "vertical": nova_vertical, 
+                                "status": novo_status, 
+                                "login_crm": novo_login_crm,
+                                "perfil_acesso": novo_perfil_acesso
                             }
                             suc, msg = adicionar_usuario_banco(dados_novo)
                             if suc:
@@ -430,8 +430,8 @@ def tela_principal():
                     mapa_usuarios = {}
                     
                     for idx, u in df_all_users.iterrows():
-                        nome_exib = str(u.get('Nome', 'Sem Nome')).strip()
-                        email_exib = str(u.get('Email', '')).strip()
+                        nome_exib = str(u.get('nome', 'Sem Nome')).strip()
+                        email_exib = str(u.get('email', '')).strip()
                         
                         if email_exib.lower() == 'nan' or not email_exib:
                             email_exib = "Sem Email cadastrado"
@@ -449,34 +449,34 @@ def tela_principal():
                         user_data = df_all_users.loc[idx_real]
                         
                         id_usuario = user_data.get('id')
-                        email_original = str(user_data.get('Email', '')).strip()
+                        email_original = str(user_data.get('email', '')).strip()
                         if email_original.lower() == 'nan': email_original = ""
                         
                         with st.form("form_edit_user"):
                             c1, c2 = st.columns(2)
-                            ed_nome = c1.text_input("Nome Completo *", value=str(user_data.get('Nome', '')).replace('nan',''))
+                            ed_nome = c1.text_input("Nome Completo *", value=str(user_data.get('nome', '')).replace('nan',''))
                             ed_email = c2.text_input("E-mail (Login) *", value=email_original)
                             
                             c3, c4 = st.columns(2)
-                            ed_senha = c3.text_input("Senha *", value=str(user_data.get('Senha', '')).replace('nan',''))
+                            ed_senha = c3.text_input("Senha *", value=str(user_data.get('senha', '')).replace('nan',''))
                             
                             opcoes_status = ["Ativo", "Inativo"]
-                            idx_status = opcoes_status.index(user_data.get('Status', 'Ativo')) if user_data.get('Status', 'Ativo') in opcoes_status else 0
+                            idx_status = opcoes_status.index(user_data.get('status', 'Ativo')) if user_data.get('status', 'Ativo') in opcoes_status else 0
                             ed_status = c4.selectbox("Status no Sistema", opcoes_status, index=idx_status)
                             
                             c5, c6, c7 = st.columns(3)
                             opcoes_perfil = ["Vendedor", "Lider", "Gerente_Unidade", "Gerente_Varejo", "Gerente_Condominio", "Diretoria"]
-                            idx_perfil = opcoes_perfil.index(user_data.get('Perfil', 'Vendedor')) if user_data.get('Perfil', 'Vendedor') in opcoes_perfil else 0
+                            idx_perfil = opcoes_perfil.index(user_data.get('perfil', 'Vendedor')) if user_data.get('perfil', 'Vendedor') in opcoes_perfil else 0
                             ed_perfil = c5.selectbox("Cargo/Perfil", opcoes_perfil, index=idx_perfil)
                             
-                            ed_unidade = c6.text_input("Unidade Base", value=str(user_data.get('Unidade', '')).replace('nan',''))
-                            ed_vertical = c7.text_input("Vertical", value=str(user_data.get('Vertical', '')).replace('nan','')) 
+                            ed_unidade = c6.text_input("Unidade Base", value=str(user_data.get('unidade', '')).replace('nan',''))
+                            ed_vertical = c7.text_input("Vertical", value=str(user_data.get('vertical', '')).replace('nan','')) 
                             
                             c8, c9 = st.columns(2)
-                            ed_login_crm = c8.text_input("Login do CRM", value=str(user_data.get('Login_CRM', '')).replace('nan',''))
+                            ed_login_crm = c8.text_input("Login do CRM", value=str(user_data.get('login_crm', '')).replace('nan',''))
                             
                             opcoes_acc = ["padrao", "administrador"]
-                            curr_acc = str(user_data.get('Perfil_Acesso', 'padrao')).lower().strip()
+                            curr_acc = str(user_data.get('perfil_acesso', 'padrao')).lower().strip()
                             idx_acc = opcoes_acc.index(curr_acc) if curr_acc in opcoes_acc else 0
                             ed_perfil_acesso = c9.selectbox("Perfil de Acesso (App)", opcoes_acc, index=idx_acc)
                             
@@ -485,15 +485,15 @@ def tela_principal():
                                     st.error("⚠️ Nome, E-mail e Senha são campos obrigatórios!")
                                 else:
                                     dados_update = {
-                                        "Nome": ed_nome, 
-                                        "Email": str(ed_email).lower().strip(), 
-                                        "Senha": ed_senha, 
-                                        "Perfil": ed_perfil, 
-                                        "Unidade": ed_unidade,
-                                        "Vertical": ed_vertical, 
-                                        "Status": ed_status, 
-                                        "Login_CRM": ed_login_crm,
-                                        "Perfil_Acesso": ed_perfil_acesso
+                                        "nome": ed_nome, 
+                                        "email": str(ed_email).lower().strip(), 
+                                        "senha": ed_senha, 
+                                        "perfil": ed_perfil, 
+                                        "unidade": ed_unidade,
+                                        "vertical": ed_vertical, 
+                                        "status": ed_status, 
+                                        "login_crm": ed_login_crm,
+                                        "perfil_acesso": ed_perfil_acesso
                                     }
                                     suc, msg = atualizar_usuario_banco(id_usuario, email_original, dados_update)
                                     if suc:
@@ -507,14 +507,14 @@ def tela_principal():
     elif st.session_state["etapa_atual"] == "dashboard":
         st.header("📈 Dashboard Gerencial")
         df_users = carregar_usuarios()
-        df_users['Email_C'] = df_users['Email'].astype(str).str.strip().str.lower()
+        df_users['email_c'] = df_users['email'].astype(str).str.strip().str.lower()
         perfil, minha_unidade = st.session_state['perfil_usuario'], st.session_state['unidade_usuario'].lower()
         
         df_eq_leads, df_eq_prop, mapa_vendedores, sel_filtros = aplicar_filtros_gerenciais(df_users, carregar_todos_leads(), carregar_todas_propostas(), perfil, minha_unidade)
         
         total_leads = len(df_eq_leads)
         total_propostas = len(df_eq_prop)
-        df_aprovadas = df_eq_prop[df_eq_prop['Status_Proposta'].astype(str).str.strip() == 'Aprovada'].copy() if not df_eq_prop.empty else pd.DataFrame()
+        df_aprovadas = df_eq_prop[df_eq_prop['status_proposta'].astype(str).str.strip() == 'Aprovada'].copy() if not df_eq_prop.empty else pd.DataFrame()
         total_aprovadas = len(df_aprovadas)
         
         conv_lead = (total_aprovadas / total_leads * 100) if total_leads > 0 else 0.0
@@ -522,13 +522,13 @@ def tela_principal():
         
         tm_mrr, tm_setup, realizado_mrr, realizado_setup = 0.0, 0.0, 0.0, 0.0
         if not df_aprovadas.empty:
-            df_aprovadas['Val_MRR'] = df_aprovadas['Total_MRR'].apply(converter_para_numero)
-            df_aprovadas['Val_Setup'] = df_aprovadas['Total_Setup'].apply(converter_para_numero)
+            df_aprovadas['val_mrr'] = df_aprovadas['total_mrr'].apply(converter_para_numero)
+            df_aprovadas['val_setup'] = df_aprovadas['total_setup'].apply(converter_para_numero)
             
-            tm_mrr = df_aprovadas['Val_MRR'].mean()
-            tm_setup = df_aprovadas['Val_Setup'].mean()
-            realizado_mrr = df_aprovadas['Val_MRR'].sum()
-            realizado_setup = df_aprovadas['Val_Setup'].sum()
+            tm_mrr = df_aprovadas['val_mrr'].mean()
+            tm_setup = df_aprovadas['val_setup'].mean()
+            realizado_mrr = df_aprovadas['val_mrr'].sum()
+            realizado_setup = df_aprovadas['val_setup'].sum()
 
         st.markdown("#### 🎯 Conversão e Ticket Médio")
         c1, c2, c3, c4 = st.columns(4)
@@ -553,9 +553,9 @@ def tela_principal():
 
         meta_total_mrr, meta_total_setup = 0.0, 0.0
         if mapa_vendedores:
-            df_vendedores_filtrados = df_users[df_users['Email_C'].isin(mapa_vendedores.keys())]
+            df_vendedores_filtrados = df_users[df_users['email_c'].isin(mapa_vendedores.keys())]
             for _, u in df_vendedores_filtrados.iterrows():
-                vert = str(u.get('Vertical', '')).lower()
+                vert = str(u.get('vertical', '')).lower()
                 if 'varejo' in vert:
                     meta_total_mrr += float(cfg.get("Meta_Varejo_Receita_Vendedor", 1250))
                     meta_total_setup += float(cfg.get("Meta_Varejo_Produtos_Vendedor", 5000))
@@ -598,7 +598,7 @@ def tela_principal():
         cg1, cg2, cg3 = st.columns(3)
         with cg1:
             st.markdown("**Status das Negociações**")
-            if not df_eq_prop.empty: st.bar_chart(df_eq_prop['Status_Proposta'].value_counts())
+            if not df_eq_prop.empty: st.bar_chart(df_eq_prop['status_proposta'].value_counts())
             else: st.info("Sem dados")
         with cg2:
             st.markdown("**Volume do Pipeline**")
@@ -613,7 +613,7 @@ def tela_principal():
                         col_motivo = c
                         break
                 if col_motivo:
-                    df_perdidas = df_eq_prop[df_eq_prop['Status_Proposta'].astype(str).str.strip() == 'Perdida']
+                    df_perdidas = df_eq_prop[df_eq_prop['status_proposta'].astype(str).str.strip() == 'Perdida']
                     if not df_perdidas.empty:
                         m_counts = df_perdidas[col_motivo].replace('', pd.NA).dropna().value_counts()
                         if not m_counts.empty:
@@ -632,25 +632,25 @@ def tela_principal():
         st.markdown("#### 🏆 Ranking de Vendas da Equipe (Aprovadas)")
         
         if not df_aprovadas.empty:
-            df_ranking = df_aprovadas.groupby('Email_Vendedor').agg(
-                Vendedor=('Nome_Usuario', 'first'),
-                Receita_Mensalidade=('Val_MRR', 'sum'),
-                Receita_Setup=('Val_Setup', 'sum')
+            df_ranking = df_aprovadas.groupby('email_vendedor').agg(
+                Vendedor=('nome_usuario', 'first'),
+                Receita_Mensalidade=('val_mrr', 'sum'),
+                Receita_Setup=('val_setup', 'sum')
             ).reset_index()
 
-            mapa_unidades = dict(zip(df_users['Email_C'], df_users['Unidade']))
-            df_ranking['Unidade'] = df_ranking['Email_Vendedor'].apply(lambda e: str(mapa_unidades.get(e, '-')))
+            mapa_unidades = dict(zip(df_users['email_c'], df_users['unidade']))
+            df_ranking['Unidade'] = df_ranking['email_vendedor'].apply(lambda e: str(mapa_unidades.get(e, '-')))
             
             mapa_meta_ind = {}
             for _, u in df_users.iterrows():
-                email = str(u.get('Email_C', '')).strip()
-                vert = str(u.get('Vertical', '')).lower()
+                email = str(u.get('email_c', '')).strip()
+                vert = str(u.get('vertical', '')).lower()
                 if 'varejo' in vert: m = float(cfg.get("Meta_Varejo_Receita_Vendedor", 1250))
                 elif 'condominio' in vert: m = float(cfg.get("Meta_Condominio_Receita_Vendedor", 2500))
                 else: m = float(cfg.get("Meta_Varejo_Receita_Vendedor", 1250))
                 mapa_meta_ind[email] = (m / 30) * dia_ref
 
-            df_ranking['Meta_Prop'] = df_ranking['Email_Vendedor'].map(mapa_meta_ind).fillna(1.0)
+            df_ranking['Meta_Prop'] = df_ranking['email_vendedor'].map(mapa_meta_ind).fillna(1.0)
             df_ranking['Perc_Ating'] = (df_ranking['Receita_Mensalidade'] / df_ranking['Meta_Prop']) * 100
 
             c_vazio_rank, c_sort_rank = st.columns([6, 4])
@@ -685,7 +685,7 @@ def tela_principal():
         st.markdown("#### 📡 Monitor de Atividade da Equipe")
         st.caption("Visão em tempo real baseada no último clique de cada consultor da sua base filtrada (Horário Comercial).")
         
-        df_equipe_vida = df_users[df_users['Email_C'].isin(mapa_vendedores.keys())].copy()
+        df_equipe_vida = df_users[df_users['email_c'].isin(mapa_vendedores.keys())].copy()
         
         if not df_equipe_vida.empty:
             dados_vida = []
@@ -693,9 +693,9 @@ def tela_principal():
             agora_dt = datetime.datetime.now(fuso_br)
             
             for _, u in df_equipe_vida.iterrows():
-                nome_u = str(u.get('Nome', 'Desconhecido'))
-                unidade_u = str(u.get('Unidade', '-'))
-                ultimo_acesso_str = str(u.get('Ultimo_Acesso', '')).strip()
+                nome_u = str(u.get('nome', 'Desconhecido'))
+                unidade_u = str(u.get('unidade', '-'))
+                ultimo_acesso_str = str(u.get('ultimo_acesso', '')).strip()
                 
                 status_vida = "⚪ Nunca acessou"
                 
@@ -732,23 +732,23 @@ def tela_principal():
     elif st.session_state["etapa_atual"] == "mapa_equipe":
         st.header("🗺️ Localização da Equipe")
         df_users = carregar_usuarios()
-        df_users['Email_C'] = df_users['Email'].astype(str).str.strip().str.lower()
+        df_users['email_c'] = df_users['email'].astype(str).str.strip().str.lower()
         perfil, minha_unidade = st.session_state['perfil_usuario'], st.session_state['unidade_usuario'].lower()
         
         df_eq_l, _, _, _ = aplicar_filtros_gerenciais(df_users, carregar_todos_leads(), carregar_todas_propostas(), perfil, minha_unidade)
         
         st.write("---")
         df_mapa = df_eq_l.copy()
-        if not df_mapa.empty and 'Coordenadas_GPS' in df_mapa.columns:
-            df_mapa['lat'] = pd.to_numeric(df_mapa['Coordenadas_GPS'].astype(str).str.split(',').str[0], errors='coerce')
-            df_mapa['lon'] = pd.to_numeric(df_mapa['Coordenadas_GPS'].astype(str).str.split(',').str[1], errors='coerce')
+        if not df_mapa.empty and 'coordenadas_gps' in df_mapa.columns:
+            df_mapa['lat'] = pd.to_numeric(df_mapa['coordenadas_gps'].astype(str).str.split(',').str[0], errors='coerce')
+            df_mapa['lon'] = pd.to_numeric(df_mapa['coordenadas_gps'].astype(str).str.split(',').str[1], errors='coerce')
             df_mapa = df_mapa.dropna(subset=['lat', 'lon'])
             
             if not df_mapa.empty:
-                df_mapa['Nome_Exibicao'] = df_mapa['Nome_Razao'].astype(str).fillna('Cliente Desconhecido')
+                df_mapa['nome_exibicao'] = df_mapa['nome_razao'].astype(str).fillna('Cliente Desconhecido')
                 df_agrupado = df_mapa.groupby(['lat', 'lon']).agg(
-                    Qtd=('Nome_Exibicao', 'count'),
-                    Nomes=('Nome_Exibicao', lambda x: ' | '.join(list(x)))
+                    Qtd=('nome_exibicao', 'count'),
+                    Nomes=('nome_exibicao', lambda x: ' | '.join(list(x)))
                 ).reset_index()
                 
                 df_agrupado['cor_rgba'] = df_agrupado['Qtd'].apply(lambda x: [0, 102, 204, 200] if x == 1 else [227, 6, 19, 200])
@@ -764,7 +764,7 @@ def tela_principal():
     elif st.session_state["etapa_atual"] == "funil_equipe":
         st.header("📊 Funil da Equipe")
         df_users = carregar_usuarios()
-        df_users['Email_C'] = df_users['Email'].astype(str).str.strip().str.lower()
+        df_users['email_c'] = df_users['email'].astype(str).str.strip().str.lower()
         perfil, minha_unidade = st.session_state['perfil_usuario'], st.session_state['unidade_usuario'].lower()
         
         df_eq_leads, df_eq_prop, mapa_vendedores, _ = aplicar_filtros_gerenciais(df_users, carregar_todos_leads(), carregar_todas_propostas(), perfil, minha_unidade)
@@ -784,22 +784,22 @@ def tela_principal():
                 with h5: st.markdown("**📊 Status**")
                 st.write("---")
                 for idx, row in df_eq_leads.iterrows():
-                    nome = str(row.get('Nome_Razao', 'Não Informado')).strip()
-                    telefone, data_cad = str(row.get('Telefone', '-')).strip(), str(row.get('Data_Cadastro', '-')).split(" ")[0]
-                    vendedor = str(mapa_vendedores.get(str(row.get('Email_Vendedor', '')), "Desconhecido"))
+                    nome = str(row.get('nome_razao', 'Não Informado')).strip()
+                    telefone, data_cad = str(row.get('telefone', '-')).strip(), str(row.get('data_cadastro', '-')).split(" ")[0]
+                    vendedor = str(mapa_vendedores.get(str(row.get('email_vendedor', '')), "Desconhecido"))
                     
                     status_lead = "🔵 Lead"
-                    if not df_eq_prop.empty and 'Nome_Cliente' in df_eq_prop.columns:
-                        prop_cliente = df_eq_prop[df_eq_prop['Nome_Cliente'].astype(str).str.strip() == nome]
+                    if not df_eq_prop.empty and 'nome_cliente' in df_eq_prop.columns:
+                        prop_cliente = df_eq_prop[df_eq_prop['nome_cliente'].astype(str).str.strip() == nome]
                         if not prop_cliente.empty:
-                            status_str = str(prop_cliente.iloc[-1].get('Status_Proposta', '')).strip()
+                            status_str = str(prop_cliente.iloc[-1].get('status_proposta', '')).strip()
                             status_lead = "🏆 Aprovada" if status_str == "Aprovada" else ("🔴 Perdida" if status_str == "Perdida" else "🟢 Proposta")
                     
                     c1, c2, c3, c4, c5 = st.columns([2, 4, 2, 2, 2])
                     with c1: st.write(vendedor[:18] + ("..." if len(vendedor) > 18 else ""))
                     with c2: 
                         with st.expander(f"👤 {nome[:25]}{'...' if len(nome) > 25 else ''}"):
-                            st.markdown(f"**Endereço:** {row.get('Endereco', '')}, {row.get('Numero', '')} - {row.get('Cidade', '')}<br>**Contato:** {row.get('Contato', '')} | **E-mail:** {row.get('Email_Cliente', '')}", unsafe_allow_html=True)
+                            st.markdown(f"**Endereço:** {row.get('endereco', '')}, {row.get('numero', '')} - {row.get('cidade', '')}<br>**Contato:** {row.get('contato', '')} | **E-mail:** {row.get('email_cliente', '')}", unsafe_allow_html=True)
                     with c3: st.write(telefone)
                     with c4: st.write(data_cad)
                     with c5: st.write(status_lead)
@@ -807,11 +807,9 @@ def tela_principal():
         with aba_prop:
             if df_eq_prop.empty: st.info("Nenhuma proposta encontrada para esta seleção.")
             else:
-                # --- SISTEMA DE ORDENAÇÃO APLICADO AQUI ---
                 df_eq_prop = df_eq_prop.copy()
                 
-                # Criando colunas invisíveis para facilitar a ordenação matemática
-                df_eq_prop['Data_Sort'] = pd.to_datetime(df_eq_prop['Data_Proposta'].astype(str).str.split(" ").str[0], format='%d/%m/%Y', errors='coerce')
+                df_eq_prop['Data_Sort'] = pd.to_datetime(df_eq_prop['data_proposta'].astype(str).str.split(" ").str[0], format='%d/%m/%Y', errors='coerce')
                 
                 def converter_moeda_para_sort(valor):
                     try:
@@ -819,12 +817,11 @@ def tela_principal():
                         v = v.replace('.', '').replace(',', '.')
                         return float(v)
                     except: return 0.0
-                df_eq_prop['Servicos_Sort'] = df_eq_prop['Total_MRR'].apply(converter_moeda_para_sort)
+                df_eq_prop['Servicos_Sort'] = df_eq_prop['total_mrr'].apply(converter_moeda_para_sort)
                 
                 temp_map = {"Quente": 3, "Morno": 2, "Frio": 1}
-                df_eq_prop['Temp_Sort'] = df_eq_prop['Temperatura'].astype(str).apply(lambda x: temp_map.get(x.split(" ")[0], 0))
+                df_eq_prop['Temp_Sort'] = df_eq_prop['temperatura'].astype(str).apply(lambda x: temp_map.get(x.split(" ")[0], 0))
 
-                # Caixa de Seleção de Ordenação
                 c_vazio, c_sort = st.columns([6, 4])
                 with c_sort:
                     sort_option = st.selectbox("Ordenar por:", [
@@ -833,7 +830,6 @@ def tela_principal():
                         "Serviços (Maior Valor)", "Serviços (Menor Valor)"
                     ], label_visibility="collapsed")
                 
-                # Aplicando a ordenação com base na seleção
                 if sort_option == "Data (Mais recentes)":
                     df_eq_prop = df_eq_prop.sort_values(by='Data_Sort', ascending=False)
                 elif sort_option == "Data (Mais antigas)":
@@ -861,19 +857,19 @@ def tela_principal():
                 st.write("---")
                 
                 for idx, row in df_eq_prop.iterrows():
-                    data_p = str(row.get('Data_Proposta', '')).split(" ")[0]
-                    vendedor = str(mapa_vendedores.get(str(row.get('Email_Vendedor', '')), "Desconhecido"))
-                    cliente = str(row.get('Nome_Cliente', ''))
-                    nome_prop = str(row.get('Nome_Proposta', 'Principal'))
-                    status = str(row.get('Status_Proposta', 'Em Negociação')).strip() or "Em Negociação"
-                    temperatura = str(row.get('Temperatura', 'Morno 🌤️')).split(" ")[0]
-                    mrr, setup = str(row.get('Total_MRR', '')), str(row.get('Total_Setup', ''))
+                    data_p = str(row.get('data_proposta', '')).split(" ")[0]
+                    vendedor = str(mapa_vendedores.get(str(row.get('email_vendedor', '')), "Desconhecido"))
+                    cliente = str(row.get('nome_cliente', ''))
+                    nome_prop = str(row.get('nome_proposta', 'Principal'))
+                    status = str(row.get('status_proposta', 'Em Negociação')).strip() or "Em Negociação"
+                    temperatura = str(row.get('temperatura', 'Morno 🌤️')).split(" ")[0]
+                    mrr, setup = str(row.get('total_mrr', '')), str(row.get('total_setup', ''))
                     
-                    prop_renovada = str(row.get('Data_Proposta_Renovada', '')).replace('nan', '').replace('None', '').strip()
-                    data_ref_prop_str = prop_renovada if prop_renovada else str(row.get('Data_Proposta', '')).replace('nan', '').replace('None', '').strip()
+                    prop_renovada = str(row.get('data_proposta_renovada', '')).replace('nan', '').replace('None', '').strip()
+                    data_ref_prop_str = prop_renovada if prop_renovada else str(row.get('data_proposta', '')).replace('nan', '').replace('None', '').strip()
                     
-                    temp_renovada = str(row.get('Data_Temperatura_Renovada', '')).replace('nan', '').replace('None', '').strip()
-                    data_ref_temp_str = temp_renovada if temp_renovada else str(row.get('Data_Proposta', '')).replace('nan', '').replace('None', '').strip()
+                    temp_renovada = str(row.get('data_temperatura_renovada', '')).replace('nan', '').replace('None', '').strip()
+                    data_ref_temp_str = temp_renovada if temp_renovada else str(row.get('data_proposta', '')).replace('nan', '').replace('None', '').strip()
                     
                     tempo_faltante = "-"
                     if status == "Em Negociação":
@@ -896,7 +892,7 @@ def tela_principal():
                     with c_v: st.write(vendedor[:12] + ("..." if len(vendedor) > 12 else ""))
                     with c2: 
                         with st.expander(f"👤 {cliente[:18]}{'...' if len(cliente) > 18 else ''}"):
-                            itens_crm = extrair_tabela_crm_itens(row.get('Itens_Orcamento', ''))
+                            itens_crm = extrair_tabela_crm_itens(row.get('itens_orcamento', ''))
                             if itens_crm: st.dataframe(itens_crm, use_container_width=True, hide_index=True)
                             else: st.info("Sem detalhes avançados.")
                     with c_np: st.write(nome_prop[:15] + ("..." if len(nome_prop) > 15 else ""))
@@ -916,7 +912,7 @@ def tela_principal():
             idx_planilha = st.session_state["renovar_proposta_idx"]
             dados_prop = st.session_state["renovar_proposta_dados"]
             
-            st.info(f"🎯 **Gerenciar Proposta:** {dados_prop.get('Nome_Cliente')} *(Ref: {dados_prop.get('Nome_Proposta', '')})*")
+            st.info(f"🎯 **Gerenciar Proposta:** {dados_prop.get('nome_cliente')} *(Ref: {dados_prop.get('nome_proposta', '')})*")
             
             c1, c2 = st.columns(2)
             acao = c1.selectbox("O que aconteceu com esta negociação?", ["Selecione...", "Atualizar Temperatura", "Renovar Proposta e Temperatura", "Aprovação da Proposta", "Perda na negociação"], key="acao_prop_manual")
@@ -940,7 +936,7 @@ def tela_principal():
                         if efetivar_aprovacao(idx_planilha):
                             mrr_fmt, eqp_fmt, mo_fmt = obter_detalhes_split(dados_prop, df_produtos, df_valor_sensor, df_valor_ponto, st.session_state['unidade_usuario'])
                             df_us = carregar_usuarios()
-                            df_us['Email_C'] = df_us['Email'].astype(str).str.strip().str.lower()
+                            df_us['email_c'] = df_us['email'].astype(str).str.strip().str.lower()
                             emails_destino = obter_emails_gestores(df_us, st.session_state['unidade_usuario'], st.session_state['vertical_usuario'])
                             if emails_destino: enviar_email_aprovacao(st.session_state['nome_usuario'], st.session_state['unidade_usuario'], st.session_state['vertical_usuario'], mrr_fmt, eqp_fmt, mo_fmt, emails_destino)
                             st.session_state["msg_sucesso"] = "Proposta Aprovada com sucesso! 🏆"
@@ -954,7 +950,7 @@ def tela_principal():
                             
                 elif acao == "Renovar Proposta e Temperatura":
                     mrr_n, setup_n = calcular_novos_valores_proposta(dados_prop, df_produtos, df_valor_sensor)
-                    mrr_a, setup_a = dados_prop.get('Total_MRR', ''), dados_prop.get('Total_Setup', '')
+                    mrr_a, setup_a = dados_prop.get('total_mrr', ''), dados_prop.get('total_setup', '')
                     pode_renovar = True
                     
                     if mrr_n != mrr_a or setup_n != setup_a:
@@ -984,10 +980,10 @@ def tela_principal():
         hoje = datetime.datetime.now()
         cfg = carregar_configuracoes()
         vertical_user = str(st.session_state.get('vertical_usuario', '')).strip().lower()
-        if "varejo" in vertical_user: limite_vencimento, limite_temp = int(cfg.get("Venc_Proposta_Varejo", 10)), int(cfg.get("Temp_Proposta_Varejo", 5))
-        elif "condominio" in vertical_user: limite_vencimento, limite_temp = int(cfg.get("Venc_Proposta_Cond", 10)), int(cfg.get("Temp_Proposta_Cond", 5))
-        elif "grandes_contas" in vertical_user or "gc" in vertical_user: limite_vencimento, limite_temp = int(cfg.get("Venc_Proposta_GC", 10)), int(cfg.get("Temp_Proposta_GC", 5))
-        else: limite_vencimento, limite_temp = int(cfg.get("Venc_Proposta", 10)), int(cfg.get("Temp_Proposta", 5))
+        if "varejo" in vertical_user: limite_vencimento, limite_temp = int(cfg.get("venc_proposta_varejo", 10)), int(cfg.get("temp_proposta_varejo", 5))
+        elif "condominio" in vertical_user: limite_vencimento, limite_temp = int(cfg.get("venc_proposta_cond", 10)), int(cfg.get("temp_proposta_cond", 5))
+        elif "grandes_contas" in vertical_user or "gc" in vertical_user: limite_vencimento, limite_temp = int(cfg.get("venc_proposta_gc", 10)), int(cfg.get("temp_proposta_gc", 5))
+        else: limite_vencimento, limite_temp = int(cfg.get("venc_proposta", 10)), int(cfg.get("temp_proposta", 5))
 
         if df_prop.empty: st.info("Nenhuma proposta registrada.")
         else:
@@ -1008,13 +1004,13 @@ def tela_principal():
                 
                 for idx, row in df_prop.iterrows():
                     linha_real_planilha = row.name + 2 
-                    data_p, data_ult_str = str(row.get('Data_Proposta', '')).split(" ")[0], str(row.get('Data_Proposta_Renovada', '')).split(" ")[0]
-                    cliente, nome_prop = str(row.get('Nome_Cliente', '')), str(row.get('Nome_Proposta', 'Principal'))
-                    status, mrr, setup = str(row.get('Status_Proposta', 'Em Negociação')).strip() or "Em Negociação", str(row.get('Total_MRR', '')), str(row.get('Total_Setup', ''))
-                    temperatura = str(row.get('Temperatura', 'Morno 🌤️')).split(" ")[0]
-                    data_ref_prop_str = str(row.get('Data_Proposta_Renovada', '')).strip() or str(row.get('Data_Proposta', '')).strip()
-                    data_ref_temp_str = str(row.get('Data_Temperatura_Renovada', '')).strip() or str(row.get('Data_Proposta', '')).strip()
-                    vendedor = str(row.get('Nome_Usuario', ''))
+                    data_p, data_ult_str = str(row.get('data_proposta', '')).split(" ")[0], str(row.get('data_proposta_renovada', '')).split(" ")[0]
+                    cliente, nome_prop = str(row.get('nome_cliente', '')), str(row.get('nome_proposta', 'Principal'))
+                    status, mrr, setup = str(row.get('status_proposta', 'Em Negociação')).strip() or "Em Negociação", str(row.get('total_mrr', '')), str(row.get('total_setup', ''))
+                    temperatura = str(row.get('temperatura', 'Morno 🌤️')).split(" ")[0]
+                    data_ref_prop_str = str(row.get('data_proposta_renovada', '')).strip() or str(row.get('data_proposta', '')).strip()
+                    data_ref_temp_str = str(row.get('data_temperatura_renovada', '')).strip() or str(row.get('data_proposta', '')).strip()
+                    vendedor = str(row.get('nome_usuario', ''))
                     
                     tempo_faltante = "-"
                     if status == "Em Negociação":
@@ -1037,7 +1033,7 @@ def tela_principal():
                     with c_ult: st.write(data_ult_str if data_ult_str else "-")
                     with c2: 
                         with st.expander(f"👤 {cliente[:18]}{'...' if len(cliente)>18 else ''}"):
-                            itens_crm = extrair_tabela_crm_itens(row.get('Itens_Orcamento', ''))
+                            itens_crm = extrair_tabela_crm_itens(row.get('itens_orcamento', ''))
                             if itens_crm: st.dataframe(itens_crm, use_container_width=True, hide_index=True)
                     with c_np: st.write(nome_prop[:15] + ("..." if len(nome_prop)>15 else ""))
                     with c3: st.write(f"{cor_status} {status}")
@@ -1046,19 +1042,18 @@ def tela_principal():
                     with c5: st.write(mrr)
                     with c6: st.write(setup)
                     with c7:
-                        # RECUPERA O LEAD PARA INJETAR NO CONTRATO DA TABELA
                         lead_para_contrato = {"nome": cliente}
-                        match_lead = df_leads[df_leads['Nome_Razao'].astype(str).str.strip() == cliente.strip()]
+                        match_lead = df_leads[df_leads['nome_razao'].astype(str).str.strip() == cliente.strip()]
                         if not match_lead.empty:
                             lr = match_lead.iloc[0]
-                            lead_para_contrato = {"nome": str(lr.get("Nome_Razao", "")), "cpf_cnpj": str(lr.get("CPF_CNPJ", "")).replace('nan', ''), "endereco": str(lr.get("Endereco", "")).replace('nan', ''), "numero": str(lr.get("Numero", "")).replace('nan', ''), "cidade": str(lr.get("Cidade", "")).replace('nan', ''), "estado": str(lr.get("Estado", "")).replace('nan', ''), "telefone": str(lr.get("Telefone", "")).replace('nan', ''), "email_cliente": str(lr.get("Email_Cliente", "")).replace('nan', '')}
+                            lead_para_contrato = {"nome": str(lr.get("nome_razao", "")), "cpf_cnpj": str(lr.get("cpf_cnpj", "")).replace('nan', ''), "endereco": str(lr.get("endereco", "")).replace('nan', ''), "numero": str(lr.get("numero", "")).replace('nan', ''), "cidade": str(lr.get("cidade", "")).replace('nan', ''), "estado": str(lr.get("estado", "")).replace('nan', ''), "telefone": str(lr.get("telefone", "")).replace('nan', ''), "email_cliente": str(lr.get("email_cliente", "")).replace('nan', '')}
                             
-                        itens_para_html = [{"quantidade": it["Qtd"], "nome": it["Produto / Serviço"]} for it in extrair_tabela_crm_itens(row.get('Itens_Orcamento', ''))]
-                        condicao_txt = f"{str(row.get('Parcelas', '1x'))} de {str(row.get('Valor_Parcela', 'R$ 0,00'))} ({str(row.get('Forma_Pagamento', 'Boleto'))})"
+                        itens_para_html = [{"quantidade": it["Qtd"], "nome": it["Produto / Serviço"]} for it in extrair_tabela_crm_itens(row.get('itens_orcamento', ''))]
+                        condicao_txt = f"{str(row.get('parcelas', '1x'))} de {str(row.get('valor_parcela', 'R$ 0,00'))} ({str(row.get('forma_pagamento', 'Boleto'))})"
                         
                         html_prop = gerar_html_proposta(cliente, nome_prop, vendedor, itens_para_html, mrr, setup, condicao_txt)
                         
-                        docx_bytes, erro_docx = gerar_documento_contrato(lead_para_contrato, mrr, setup, condicao_txt, row.get('Itens_Orcamento', ''))
+                        docx_bytes, erro_docx = gerar_documento_contrato(lead_para_contrato, mrr, setup, condicao_txt, row.get('itens_orcamento', ''))
                         
                         opcoes_acao = ["Selecione...", "📄 PDF Proposta", "📄 PDF Contrato", "✍️ Assinar Zapsign"]
                         if status == "Em Negociação":
@@ -1097,16 +1092,16 @@ def tela_principal():
             else:
                 for idx, row in df_prop.iterrows():
                     linha_real_planilha = row.name + 2 
-                    data_p, cliente, nome_prop = str(row.get('Data_Proposta', '')).split(" ")[0], str(row.get('Nome_Cliente', '')), str(row.get('Nome_Proposta', 'Principal'))
-                    status, mrr, setup = str(row.get('Status_Proposta', 'Em Negociação')).strip() or "Em Negociação", str(row.get('Total_MRR', '')), str(row.get('Total_Setup', ''))
-                    temperatura = str(row.get('Temperatura', 'Morno 🌤️')).split(" ")[0]
+                    data_p, cliente, nome_prop = str(row.get('data_proposta', '')).split(" ")[0], str(row.get('nome_cliente', '')), str(row.get('nome_proposta', 'Principal'))
+                    status, mrr, setup = str(row.get('status_proposta', 'Em Negociação')).strip() or "Em Negociação", str(row.get('total_mrr', '')), str(row.get('total_setup', ''))
+                    temperatura = str(row.get('temperatura', 'Morno 🌤️')).split(" ")[0]
                     
-                    prop_renovada = str(row.get('Data_Proposta_Renovada', '')).replace('nan', '').replace('None', '').strip()
-                    data_ref_prop_str = prop_renovada if prop_renovada else str(row.get('Data_Proposta', '')).replace('nan', '').replace('None', '').strip()
+                    prop_renovada = str(row.get('data_proposta_renovada', '')).replace('nan', '').replace('None', '').strip()
+                    data_ref_prop_str = prop_renovada if prop_renovada else str(row.get('data_proposta', '')).replace('nan', '').replace('None', '').strip()
                     
-                    temp_renovada = str(row.get('Data_Temperatura_Renovada', '')).replace('nan', '').replace('None', '').strip()
-                    data_ref_temp_str = temp_renovada if temp_renovada else str(row.get('Data_Proposta', '')).replace('nan', '').replace('None', '').strip()
-                    vendedor = str(row.get('Nome_Usuario', ''))
+                    temp_renovada = str(row.get('data_temperatura_renovada', '')).replace('nan', '').replace('None', '').strip()
+                    data_ref_temp_str = temp_renovada if temp_renovada else str(row.get('data_proposta', '')).replace('nan', '').replace('None', '').strip()
+                    vendedor = str(row.get('nome_usuario', ''))
                     
                     tempo_faltante = "-"
                     if status == "Em Negociação":
@@ -1126,21 +1121,20 @@ def tela_principal():
                     
                     with st.expander(f"{cor_status} {cliente} — {nome_prop} ({data_p})"):
                         st.markdown(f"**Status:** {status} | **Temp:** {temperatura} | **Restante:** {tempo_faltante}<br>**Serviços:** {mrr} | **Setup:** {setup}", unsafe_allow_html=True)
-                        itens_crm = extrair_tabela_crm_itens(row.get('Itens_Orcamento', ''))
+                        itens_crm = extrair_tabela_crm_itens(row.get('itens_orcamento', ''))
                         if itens_crm: st.write("---"); st.markdown("📋 **Itens do Projeto para CRM:**"); st.dataframe(itens_crm, use_container_width=True, hide_index=True)
                         st.write("")
                         
-                        # RECUPERA O LEAD PARA INJETAR NO CONTRATO DOS CARTÕES
                         lead_para_contrato = {"nome": cliente}
-                        match_lead = df_leads[df_leads['Nome_Razao'].astype(str).str.strip() == cliente.strip()]
+                        match_lead = df_leads[df_leads['nome_razao'].astype(str).str.strip() == cliente.strip()]
                         if not match_lead.empty:
                             lr = match_lead.iloc[0]
-                            lead_para_contrato = {"nome": str(lr.get("Nome_Razao", "")), "cpf_cnpj": str(lr.get("CPF_CNPJ", "")).replace('nan', ''), "endereco": str(lr.get("Endereco", "")).replace('nan', ''), "numero": str(lr.get("Numero", "")).replace('nan', ''), "cidade": str(lr.get("Cidade", "")).replace('nan', ''), "estado": str(lr.get("Estado", "")).replace('nan', ''), "telefone": str(lr.get("Telefone", "")).replace('nan', ''), "email_cliente": str(lr.get("Email_Cliente", "")).replace('nan', '')}
+                            lead_para_contrato = {"nome": str(lr.get("nome_razao", "")), "cpf_cnpj": str(lr.get("cpf_cnpj", "")).replace('nan', ''), "endereco": str(lr.get("endereco", "")).replace('nan', ''), "numero": str(lr.get("numero", "")).replace('nan', ''), "cidade": str(lr.get("cidade", "")).replace('nan', ''), "estado": str(lr.get("estado", "")).replace('nan', ''), "telefone": str(lr.get("telefone", "")).replace('nan', ''), "email_cliente": str(lr.get("email_cliente", "")).replace('nan', '')}
                             
-                        itens_para_html = [{"quantidade": it["Qtd"], "nome": it["Produto / Serviço"]} for it in extrair_tabela_crm_itens(row.get('Itens_Orcamento', ''))]
-                        condicao_txt = f"{str(row.get('Parcelas', '1x'))} de {str(row.get('Valor_Parcela', 'R$ 0,00'))} ({str(row.get('Forma_Pagamento', 'Boleto'))})"
+                        itens_para_html = [{"quantidade": it["Qtd"], "nome": it["Produto / Serviço"]} for it in extrair_tabela_crm_itens(row.get('itens_orcamento', ''))]
+                        condicao_txt = f"{str(row.get('parcelas', '1x'))} de {str(row.get('valor_parcela', 'R$ 0,00'))} ({str(row.get('forma_pagamento', 'Boleto'))})"
                         html_prop = gerar_html_proposta(cliente, nome_prop, vendedor, itens_para_html, mrr, setup, condicao_txt)
-                        docx_bytes, erro_docx = gerar_documento_contrato(lead_para_contrato, mrr, setup, condicao_txt, row.get('Itens_Orcamento', ''))
+                        docx_bytes, erro_docx = gerar_documento_contrato(lead_para_contrato, mrr, setup, condicao_txt, row.get('itens_orcamento', ''))
                         
                         st.markdown("**⚙️ Gerenciar Proposta e Negociação:**")
                         opcoes_acao = ["Selecione...", "📄 PDF Proposta", "📄 PDF Contrato", "✍️ Assinar Zapsign"]
@@ -1204,24 +1198,24 @@ def tela_principal():
                     
                 for idx, row in df_leads.iterrows():
                     linha_real_planilha = row.name + 2
-                    nome = str(row.get('Nome_Razao', 'Não Informado')).strip()
-                    telefone = str(row.get('Telefone', '-')).strip()
-                    data_cad = str(row.get('Data_Cadastro', '-')).split(" ")[0]
-                    end_curto = f"{str(row.get('Endereco', '')).strip()}, {str(row.get('Numero', '')).strip()} - {str(row.get('Cidade', '')).strip()}".replace("nan", "").strip(" ,-") or "-"
+                    nome = str(row.get('nome_razao', 'Não Informado')).strip()
+                    telefone = str(row.get('telefone', '-')).strip()
+                    data_cad = str(row.get('data_cadastro', '-')).split(" ")[0]
+                    end_curto = f"{str(row.get('endereco', '')).strip()}, {str(row.get('numero', '')).strip()} - {str(row.get('cidade', '')).strip()}".replace("nan", "").strip(" ,-") or "-"
                     
                     status_lead, data_ult_prop = "🔵 Lead", "-"
                     df_prop_total = carregar_minhas_propostas(st.session_state["email_usuario"])
-                    if not df_prop_total.empty and 'Nome_Cliente' in df_prop_total.columns:
-                        prop_cliente = df_prop_total[df_prop_total['Nome_Cliente'].astype(str).str.strip() == nome]
+                    if not df_prop_total.empty and 'nome_cliente' in df_prop_total.columns:
+                        prop_cliente = df_prop_total[df_prop_total['nome_cliente'].astype(str).str.strip() == nome]
                         if not prop_cliente.empty:
-                            status_str = str(prop_cliente.iloc[-1].get('Status_Proposta', '')).strip()
+                            status_str = str(prop_cliente.iloc[-1].get('status_proposta', '')).strip()
                             status_lead = "🏆 Aprovada" if status_str == "Aprovada" else ("🔴 Perdida" if status_str == "Perdida" else "🟢 Proposta")
-                            data_ult_prop = str(prop_cliente.iloc[-1].get('Data_Proposta', '-')).split(" ")[0]
+                            data_ult_prop = str(prop_cliente.iloc[-1].get('data_proposta', '-')).split(" ")[0]
 
                     c1, c2, c3, c4, c5, c6, c7 = st.columns([4, 3, 4, 2, 2, 2, 3])
                     with c1: 
                         with st.expander(f"👤 {nome[:25]}{'...' if len(nome)>25 else ''}"):
-                            st.markdown(f"<span style='font-size: 0.85rem; color: #475569;'><b>CPF/CNPJ:</b> {str(row.get('CPF_CNPJ', '')).replace('nan', '')}<br><b>E-mail:</b> {str(row.get('Email_Cliente', '')).replace('nan', '')}<br><b>Contato:</b> {str(row.get('Contato', '')).replace('nan', '')}</span>", unsafe_allow_html=True)
+                            st.markdown(f"<span style='font-size: 0.85rem; color: #475569;'><b>CPF/CNPJ:</b> {str(row.get('cpf_cnpj', '')).replace('nan', '')}<br><b>E-mail:</b> {str(row.get('email_cliente', '')).replace('nan', '')}<br><b>Contato:</b> {str(row.get('contato', '')).replace('nan', '')}</span>", unsafe_allow_html=True)
                     with c2: st.markdown(f"<div style='margin-top: 0.4rem;'>{telefone}</div>", unsafe_allow_html=True)
                     with c3: st.markdown(f"<div style='margin-top: 0.4rem;'>{end_curto[:30]}{'...' if len(end_curto)>30 else ''}</div>", unsafe_allow_html=True)
                     with c4: st.markdown(f"<div style='margin-top: 0.4rem;'>{data_cad}</div>", unsafe_allow_html=True)
@@ -1231,37 +1225,37 @@ def tela_principal():
                         btn1, btn2 = st.columns([7, 3])
                         with btn1:
                             if st.button("Proposta", key=f"btn_lead_{idx}", use_container_width=True): 
-                                st.session_state.update({"lead_dados": {"data_cadastro": data_cad, "nome": nome, "cpf_cnpj": str(row.get('CPF_CNPJ', '')).replace('nan', ''), "data_nascimento": str(row.get("Data_Nascimento", "")).replace('nan', ''), "endereco": str(row.get('Endereco', '')).replace('nan', ''), "numero": str(row.get('Numero', '')).replace('nan', ''), "cidade": str(row.get('Cidade', '')).replace('nan', ''), "estado": str(row.get("Estado", "")).replace('nan', ''), "telefone": telefone, "email_cliente": str(row.get('Email_Cliente', '')).replace('nan', ''), "contato": str(row.get('Contato', '')).replace('nan', ''), "gps": str(row.get("Coordenadas_GPS", "")).replace('nan', '')}, "lead_salvo": True, "gatilho_limpar_carrinho": True, "etapa_atual": "simulador", "editando_lead_idx": linha_real_planilha, "nome_proposta_atual": "", "temp_proposta_atual": "Selecione...", "status_proposta_atual": "Selecione...", "segmento_proposta_atual": "Selecione...", "status_credito_deps": None}); st.rerun()
+                                st.session_state.update({"lead_dados": {"data_cadastro": data_cad, "nome": nome, "cpf_cnpj": str(row.get('cpf_cnpj', '')).replace('nan', ''), "data_nascimento": str(row.get("data_nascimento", "")).replace('nan', ''), "endereco": str(row.get('endereco', '')).replace('nan', ''), "numero": str(row.get('numero', '')).replace('nan', ''), "cidade": str(row.get('cidade', '')).replace('nan', ''), "estado": str(row.get("estado", "")).replace('nan', ''), "telefone": telefone, "email_cliente": str(row.get('email_cliente', '')).replace('nan', ''), "contato": str(row.get('contato', '')).replace('nan', ''), "gps": str(row.get("coordenadas_gps", "")).replace('nan', '')}, "lead_salvo": True, "gatilho_limpar_carrinho": True, "etapa_atual": "simulador", "editando_lead_idx": linha_real_planilha, "nome_proposta_atual": "", "temp_proposta_atual": "Selecione...", "status_proposta_atual": "Selecione...", "segmento_proposta_atual": "Selecione...", "status_credito_deps": None}); st.rerun()
                         with btn2:
                             if st.button("✏️", help="Editar", key=f"btn_edit_lead_{idx}", use_container_width=True): 
-                                st.session_state.update({"lead_dados": {"data_cadastro": data_cad, "nome": nome, "cpf_cnpj": str(row.get('CPF_CNPJ', '')).replace('nan', ''), "data_nascimento": str(row.get("Data_Nascimento", "")).replace('nan', ''), "endereco": str(row.get('Endereco', '')).replace('nan', ''), "numero": str(row.get('Numero', '')).replace('nan', ''), "cidade": str(row.get('Cidade', '')).replace('nan', ''), "estado": str(row.get("Estado", "")).replace('nan', ''), "telefone": telefone, "email_cliente": str(row.get('Email_Cliente', '')).replace('nan', ''), "contato": str(row.get('Contato', '')).replace('nan', ''), "gps": str(row.get("Coordenadas_GPS", "")).replace('nan', '')}, "lead_salvo": True, "etapa_atual": "lead", "editando_lead_idx": linha_real_planilha}); st.rerun()
+                                st.session_state.update({"lead_dados": {"data_cadastro": data_cad, "nome": nome, "cpf_cnpj": str(row.get('cpf_cnpj', '')).replace('nan', ''), "data_nascimento": str(row.get("data_nascimento", "")).replace('nan', ''), "endereco": str(row.get('endereco', '')).replace('nan', ''), "numero": str(row.get('numero', '')).replace('nan', ''), "cidade": str(row.get('cidade', '')).replace('nan', ''), "estado": str(row.get("estado", "")).replace('nan', ''), "telefone": telefone, "email_cliente": str(row.get('email_cliente', '')).replace('nan', ''), "contato": str(row.get('contato', '')).replace('nan', ''), "gps": str(row.get("coordenadas_gps", "")).replace('nan', '')}, "lead_salvo": True, "etapa_atual": "lead", "editando_lead_idx": linha_real_planilha}); st.rerun()
 
             else:
                 for idx, row in df_leads.iterrows():
                     linha_real_planilha = row.name + 2
-                    nome = str(row.get('Nome_Razao', 'Não Informado')).strip()
-                    telefone = str(row.get('Telefone', '-')).strip()
-                    data_cad = str(row.get('Data_Cadastro', '-')).split(" ")[0]
-                    end_curto = f"{str(row.get('Endereco', '')).strip()}, {str(row.get('Numero', '')).strip()} - {str(row.get('Cidade', '')).strip()}".replace("nan", "").strip(" ,-") or "-"
+                    nome = str(row.get('nome_razao', 'Não Informado')).strip()
+                    telefone = str(row.get('telefone', '-')).strip()
+                    data_cad = str(row.get('data_cadastro', '-')).split(" ")[0]
+                    end_curto = f"{str(row.get('endereco', '')).strip()}, {str(row.get('numero', '')).strip()} - {str(row.get('cidade', '')).strip()}".replace("nan", "").strip(" ,-") or "-"
                     
                     status_lead = "🔵 Lead"
                     df_prop_total = carregar_minhas_propostas(st.session_state["email_usuario"])
-                    if not df_prop_total.empty and 'Nome_Cliente' in df_prop_total.columns:
-                        prop_cliente = df_prop_total[df_prop_total['Nome_Cliente'].astype(str).str.strip() == nome]
+                    if not df_prop_total.empty and 'nome_cliente' in df_prop_total.columns:
+                        prop_cliente = df_prop_total[df_prop_total['nome_cliente'].astype(str).str.strip() == nome]
                         if not prop_cliente.empty: 
-                            status_str = str(prop_cliente.iloc[-1].get('Status_Proposta', '')).strip()
+                            status_str = str(prop_cliente.iloc[-1].get('status_proposta', '')).strip()
                             status_lead = "🏆 Aprovada" if status_str == "Aprovada" else ("🔴 Perdida" if status_str == "Perdida" else "🟢 Proposta")
 
                     with st.expander(f"👤 {nome} ({status_lead})"):
-                        st.markdown(f"📞 <b>Telefone:</b> {telefone}<br>📍 <b>Endereço:</b> {end_curto}<br>📄 <b>CPF/CNPJ:</b> {str(row.get('CPF_CNPJ', '')).replace('nan', '')} | ✉️ <b>E-mail:</b> {str(row.get('Email_Cliente', '')).replace('nan', '')}<br>👤 <b>Contato:</b> {str(row.get('Contato', '')).replace('nan', '')} | 📅 <b>Cadastro:</b> {data_cad}", unsafe_allow_html=True)
+                        st.markdown(f"📞 <b>Telefone:</b> {telefone}<br>📍 <b>Endereço:</b> {end_curto}<br>📄 <b>CPF/CNPJ:</b> {str(row.get('cpf_cnpj', '')).replace('nan', '')} | ✉️ <b>E-mail:</b> {str(row.get('email_cliente', '')).replace('nan', '')}<br>👤 <b>Contato:</b> {str(row.get('contato', '')).replace('nan', '')} | 📅 <b>Cadastro:</b> {data_cad}", unsafe_allow_html=True)
                         st.write("")
                         c_b1, c_b2 = st.columns([7, 3])
                         with c_b1:
                             if st.button("➕ Criar Proposta", key=f"btn_lead_{idx}", type="primary", use_container_width=True): 
-                                st.session_state.update({"lead_dados": {"data_cadastro": data_cad, "nome": nome, "cpf_cnpj": str(row.get('CPF_CNPJ', '')).replace('nan', ''), "data_nascimento": str(row.get("Data_Nascimento", "")).replace('nan', ''), "endereco": str(row.get('Endereco', '')).replace('nan', ''), "numero": str(row.get('Numero', '')).replace('nan', ''), "cidade": str(row.get('Cidade', '')).replace('nan', ''), "estado": str(row.get("Estado", "")).replace('nan', ''), "telefone": telefone, "email_cliente": str(row.get('Email_Cliente', '')).replace('nan', ''), "contato": str(row.get('Contato', '')).replace('nan', ''), "gps": str(row.get("Coordenadas_GPS", "")).replace('nan', '')}, "lead_salvo": True, "gatilho_limpar_carrinho": True, "etapa_atual": "simulador", "editando_lead_idx": linha_real_planilha, "nome_proposta_atual": "", "temp_proposta_atual": "Selecione...", "status_proposta_atual": "Selecione...", "segmento_proposta_atual": "Selecione...", "status_credito_deps": None}); st.rerun()
+                                st.session_state.update({"lead_dados": {"data_cadastro": data_cad, "nome": nome, "cpf_cnpj": str(row.get('cpf_cnpj', '')).replace('nan', ''), "data_nascimento": str(row.get("data_nascimento", "")).replace('nan', ''), "endereco": str(row.get('endereco', '')).replace('nan', ''), "numero": str(row.get('numero', '')).replace('nan', ''), "cidade": str(row.get('cidade', '')).replace('nan', ''), "estado": str(row.get("estado", "")).replace('nan', ''), "telefone": telefone, "email_cliente": str(row.get('email_cliente', '')).replace('nan', ''), "contato": str(row.get('contato', '')).replace('nan', ''), "gps": str(row.get("coordenadas_gps", "")).replace('nan', '')}, "lead_salvo": True, "gatilho_limpar_carrinho": True, "etapa_atual": "simulador", "editando_lead_idx": linha_real_planilha, "nome_proposta_atual": "", "temp_proposta_atual": "Selecione...", "status_proposta_atual": "Selecione...", "segmento_proposta_atual": "Selecione...", "status_credito_deps": None}); st.rerun()
                         with c_b2:
                             if st.button("✏️ Editar", key=f"btn_edit_lead_{idx}", use_container_width=True): 
-                                st.session_state.update({"lead_dados": {"data_cadastro": data_cad, "nome": nome, "cpf_cnpj": str(row.get('CPF_CNPJ', '')).replace('nan', ''), "data_nascimento": str(row.get("Data_Nascimento", "")).replace('nan', ''), "endereco": str(row.get('Endereco', '')).replace('nan', ''), "numero": str(row.get('Numero', '')).replace('nan', ''), "cidade": str(row.get('Cidade', '')).replace('nan', ''), "estado": str(row.get("Estado", "")).replace('nan', ''), "telefone": telefone, "email_cliente": str(row.get('Email_Cliente', '')).replace('nan', ''), "contato": str(row.get('Contato', '')).replace('nan', ''), "gps": str(row.get("Coordenadas_GPS", "")).replace('nan', '')}, "lead_salvo": True, "etapa_atual": "lead", "editando_lead_idx": linha_real_planilha}); st.rerun()
+                                st.session_state.update({"lead_dados": {"data_cadastro": data_cad, "nome": nome, "cpf_cnpj": str(row.get('cpf_cnpj', '')).replace('nan', ''), "data_nascimento": str(row.get("data_nascimento", "")).replace('nan', ''), "endereco": str(row.get('endereco', '')).replace('nan', ''), "numero": str(row.get('numero', '')).replace('nan', ''), "cidade": str(row.get('cidade', '')).replace('nan', ''), "estado": str(row.get("estado", "")).replace('nan', ''), "telefone": telefone, "email_cliente": str(row.get('email_cliente', '')).replace('nan', ''), "contato": str(row.get('contato', '')).replace('nan', ''), "gps": str(row.get("coordenadas_gps", "")).replace('nan', '')}, "lead_salvo": True, "etapa_atual": "lead", "editando_lead_idx": linha_real_planilha}); st.rerun()
 
     elif st.session_state["etapa_atual"] == "lead":
         idx_editando_lead = st.session_state.get("editando_lead_idx")
@@ -1389,11 +1383,11 @@ def tela_principal():
         
         try:
             df_produtos, df_valor_sensor, df_valor_ponto, df_regras, cfg = carregar_produtos(), carregar_valores_sensores(), carregar_valores_ponto_mo(), carregar_regras_validacao(), carregar_configuracoes()
-            taxa_bruta = cfg.get("Taxa_Juros_Mensal", 0.022)
+            taxa_bruta = cfg.get("taxa_juros_mensal", 0.022)
             taxa_juros = taxa_bruta / 100 if (taxa_bruta >= 10 and taxa_bruta/10 < 1) else (taxa_bruta/100 if taxa_bruta > 1 else taxa_bruta)
-            max_sj, max_bol, max_cc = int(cfg.get("Max_Parcelas_Sem_Juros", 3)), int(cfg.get("Max_Parcelas_Boleto", 18)), int(cfg.get("Max_Parcelas_Cartao", 24))
-            lim_p, lim_a, lim_i = cfg.get("Desc_Max_Produtos", 15.0), cfg.get("Desc_Max_Alarme", 15.0), cfg.get("Desc_Max_Imagem", 30.0)
-            unidades_disponiveis = sorted(list(set(df_valor_ponto['Unidade'].dropna().astype(str).str.strip()))) if not df_valor_ponto.empty and 'Unidade' in df_valor_ponto.columns else ["Padrão"]
+            max_sj, max_bol, max_cc = int(cfg.get("max_parcelas_sem_juros", 3)), int(cfg.get("max_parcelas_boleto", 18)), int(cfg.get("max_parcelas_cartao", 24))
+            lim_p, lim_a, lim_i = cfg.get("desc_max_produtos", 15.0), cfg.get("desc_max_alarme", 15.0), cfg.get("desc_max_imagem", 30.0)
+            unidades_disponiveis = sorted(list(set(df_valor_ponto['unidade'].dropna().astype(str).str.strip()))) if not df_valor_ponto.empty and 'unidade' in df_valor_ponto.columns else ["Padrão"]
 
             c_nome, c_temp, c_status, c_unid, c_seg, c_copiar = st.columns([2.5, 1.5, 1.5, 2.0, 1.5, 2.0])
             
@@ -1444,40 +1438,36 @@ def tela_principal():
                     opcoes_copia = []
                     idx_map = {}
                     for i, r in df_prop_user.iterrows():
-                        texto_exibicao = f"{str(r.get('Nome_Cliente',''))[:15]} | {str(r.get('Nome_Proposta',''))[:15]} ({str(r.get('Data_Proposta','')).split(' ')[0]})"
+                        texto_exibicao = f"{str(r.get('nome_cliente',''))[:15]} | {str(r.get('nome_proposta',''))[:15]} ({str(r.get('data_proposta','')).split(' ')[0]})"
                         opcoes_copia.append(texto_exibicao)
                         idx_map[texto_exibicao] = r
                     
-                    # O selectbox substitui o botão e alinha perfeitamente com os outros campos
                     prop_sel = st.selectbox("📋 Copiar Orçamento Anterior", ["Selecione..."] + opcoes_copia, key="sel_copia_orc_top")
                     
                     if prop_sel != "Selecione...":
                         def efetivar_copia():
                             row_sel = idx_map[st.session_state["sel_copia_orc_top"]]
                             novo_carrinho = []
-                            for item in str(row_sel.get('Itens_Orcamento', '')).split(";"):
+                            for item in str(row_sel.get('itens_orcamento', '')).split(";"):
                                 if "x " in item:
                                     try:
                                         qtd = int(item.strip().split("x ", 1)[0])
                                         nome_item = item.strip().split("x ", 1)[1].split("[Cód:")[0].strip() if "[Cód:" in item else item.strip().split("x ", 1)[1].strip()
                                     except: qtd, nome_item = 0, ""
-                                    prod_info = df_produtos[df_produtos['Nome_Item'].astype(str).str.strip() == nome_item]
+                                    prod_info = df_produtos[df_produtos['nome_item'].astype(str).str.strip() == nome_item]
                                     if not prod_info.empty:
                                         prod = prod_info.iloc[0]
-                                        novo_carrinho.append({"nome": str(prod['Nome_Item']), "codigo": str(prod.get('Codigo_KME', '')), "tipo_sensor": str(prod.get('Tipo_Sensor', '')), "categoria": str(prod.get('Categoria_Receita', '')), "grupo": str(prod.get('Grupo_Itens', '')), "quantidade": qtd, "preco_venda": converter_para_numero(prod.get('Preco_Venda', 0)), "preco_mrr": converter_para_numero(prod.get('Preco_LOC_36', 0))})
+                                        novo_carrinho.append({"nome": str(prod['nome_item']), "codigo": str(prod.get('codigo_kme', '')), "tipo_sensor": str(prod.get('tipo_sensor', '')), "categoria": str(prod.get('categoria_receita', '')), "grupo": str(prod.get('grupo_itens', '')), "quantidade": qtd, "preco_venda": converter_para_numero(prod.get('preco_venda', 0)), "preco_mrr": converter_para_numero(prod.get('preco_loc_36', 0))})
                             
                             st.session_state["carrinho"] = novo_carrinho
-                            st.session_state["desc_prod"] = converter_para_numero(row_sel.get('Desc_Prod', '0')) or None
-                            st.session_state["desc_alarme"] = converter_para_numero(row_sel.get('Desc_Alarme', '0')) or None
-                            st.session_state["desc_imagem"] = converter_para_numero(row_sel.get('Desc_Imagem', '0')) or None
+                            st.session_state["desc_prod"] = converter_para_numero(row_sel.get('desc_prod', '0')) or None
+                            st.session_state["desc_alarme"] = converter_para_numero(row_sel.get('desc_alarme', '0')) or None
+                            st.session_state["desc_imagem"] = converter_para_numero(row_sel.get('desc_imagem', '0')) or None
                             
-                            # Volta o campo para "Selecione..." automaticamente após a cópia
                             st.session_state["sel_copia_orc_top"] = "Selecione..."
                         
-                        # O botão de confirmar aparece fininho logo abaixo da caixa apenas quando uma opção for selecionada
                         st.button("✔️ Confirmar Cópia", use_container_width=True, type="primary", on_click=efetivar_copia)
                 else:
-                    # Caso o usuário não tenha histórico, exibe a caixa desativada para manter o design alinhado
                     st.selectbox("📋 Copiar Orçamento Anterior", ["Sem histórico..."], disabled=True)
 
             st.divider()
@@ -1506,43 +1496,42 @@ def tela_principal():
                 if segmento_escolhido == "Selecione...":
                     st.info("👆 Selecione um **Segmento de Produto** no cabeçalho acima para carregar as opções do catálogo.")
                 else:
-                    # Filtra o dataframe principal para deixar apenas os itens do segmento selecionado
-                    if 'Segmento' in df_produtos.columns:
-                        df_catalogo = df_produtos[df_produtos['Segmento'].fillna("").astype(str).str.strip().str.upper() == segmento_escolhido.upper()]
+                    if 'segmento' in df_produtos.columns:
+                        df_catalogo = df_produtos[df_produtos['segmento'].fillna("").astype(str).str.strip().str.upper() == segmento_escolhido.upper()]
                     else:
                         df_catalogo = pd.DataFrame()
-                        st.error("A coluna 'Segmento' não foi encontrada na tabela Base_Produtos.")
+                        st.error("A coluna 'segmento' não foi encontrada na tabela base_produtos.")
                     
-                    if df_catalogo.empty and 'Segmento' in df_produtos.columns:
+                    if df_catalogo.empty and 'segmento' in df_produtos.columns:
                         st.warning(f"Nenhum produto encontrado para o segmento **{segmento_escolhido}** no banco de dados.")
                         
                     aba_servicos, aba_produtos, aba_mao_obra = st.tabs(["🔄 Serviços", "📦 Produtos", "🛠️ Mão de Obra"])
                     
                     def desenhar_card_produto(index, linha):
-                        is_aberto, nome_item_limpo, cat_limpa_card, cod_kme = st.session_state.get("item_aberto") == index, str(linha.get('Nome_Item', '')).strip(), str(linha.get('Categoria_Receita', '')).strip().lower(), str(linha.get('Codigo_KME', '')).strip()
-                        pv_card = converter_para_numero(linha.get('Preco_Venda', 0))
+                        is_aberto, nome_item_limpo, cat_limpa_card, cod_kme = st.session_state.get("item_aberto") == index, str(linha.get('nome_item', '')).strip(), str(linha.get('categoria_receita', '')).strip().lower(), str(linha.get('codigo_kme', '')).strip()
+                        pv_card = converter_para_numero(linha.get('preco_venda', 0))
                         
                         if unidade_selecionada and ("obra" in cat_limpa_card or "instala" in cat_limpa_card) and not df_valor_ponto.empty:
-                            match_mo_card = df_valor_ponto[(df_valor_ponto['Unidade'].astype(str).str.strip() == unidade_selecionada) & (df_valor_ponto['Nome_Item'].astype(str).str.strip() == nome_item_limpo)]
+                            match_mo_card = df_valor_ponto[(df_valor_ponto['unidade'].astype(str).str.strip() == unidade_selecionada) & (df_valor_ponto['nome_item'].astype(str).str.strip() == nome_item_limpo)]
                             if not match_mo_card.empty:
-                                pv_card = converter_para_numero(match_mo_card.iloc[0]['Valor_MO'])
-                                if str(match_mo_card.iloc[0].get('Codigo', '')).strip() and str(match_mo_card.iloc[0].get('Codigo', '')).strip() != 'nan': cod_kme = str(match_mo_card.iloc[0].get('Codigo', '')).strip()
+                                pv_card = converter_para_numero(match_mo_card.iloc[0]['valor_mo'])
+                                if str(match_mo_card.iloc[0].get('codigo', '')).strip() and str(match_mo_card.iloc[0].get('codigo', '')).strip() != 'nan': cod_kme = str(match_mo_card.iloc[0].get('codigo', '')).strip()
                         
                         if st.button(f"{'🔽' if is_aberto else '▶️'} {nome_item_limpo}{f' (Cód: {cod_kme})' if cod_kme else ''}", key=f"btn_acc_{index}", use_container_width=True): st.session_state["item_aberto"] = None if is_aberto else index; st.rerun()
                         
                         if is_aberto:
                             with st.container():
-                                st.caption(f"**Grupo:** {linha.get('Grupo_Itens', 'N/A')} | **Categoria:** {linha.get('Categoria_Receita', '')}")
+                                st.caption(f"**Grupo:** {linha.get('grupo_itens', 'N/A')} | **Categoria:** {linha.get('categoria_receita', '')}")
                                 c_qtd, c_add = st.columns([3, 7])
                                 qtd = c_qtd.number_input("Qtd", min_value=1, step=1, key=f"qtd_{index}")
                                 c_add.write(""); c_add.write("")
                                 if c_add.button("Adicionar ao Orçamento", key=f"btn_add_{index}", type="primary", use_container_width=True, disabled=(not unidade_selecionada)):
-                                    st.session_state["carrinho"].append({"nome": nome_item_limpo, "codigo": cod_kme, "tipo_sensor": str(linha.get('Tipo_Sensor', '')), "categoria": str(linha.get('Categoria_Receita', '')), "grupo": str(linha.get('Grupo_Itens', '')), "quantidade": qtd, "preco_venda": pv_card, "preco_mrr": converter_para_numero(linha.get('Preco_LOC_36', 0))})
+                                    st.session_state["carrinho"].append({"nome": nome_item_limpo, "codigo": cod_kme, "tipo_sensor": str(linha.get('tipo_sensor', '')), "categoria": str(linha.get('categoria_receita', '')), "grupo": str(linha.get('grupo_itens', '')), "quantidade": qtd, "preco_venda": pv_card, "preco_mrr": converter_para_numero(linha.get('preco_loc_36', 0))})
                                     st.session_state["item_aberto"] = None; st.rerun()
                             st.divider()
 
                     def preencher_aba_grupo(df, nome_grupo):
-                        itens = df[df['Grupo_Itens'].fillna("").astype(str).str.strip().str.lower() == nome_grupo.lower()]
+                        itens = df[df['grupo_itens'].fillna("").astype(str).str.strip().str.lower() == nome_grupo.lower()]
                         with st.container(height=500):
                             if itens.empty: st.info(f"Nenhum item em '{nome_grupo}'.")
                             else:
@@ -1554,7 +1543,7 @@ def tela_principal():
                         for i, nome in enumerate(grupos_serv):
                             with sub_abas_serv[i]: preencher_aba_grupo(df_catalogo, nome)
                         with sub_abas_serv[-1]:
-                            outros_serv = df_catalogo[df_catalogo['Categoria_Receita'].fillna("").astype(str).str.lower().str.contains("mensal|loca|servi|seguro") & ~df_catalogo['Grupo_Itens'].fillna("").astype(str).str.strip().str.lower().isin([g.lower() for g in grupos_serv])]
+                            outros_serv = df_catalogo[df_catalogo['categoria_receita'].fillna("").astype(str).str.lower().str.contains("mensal|loca|servi|seguro") & ~df_catalogo['grupo_itens'].fillna("").astype(str).str.strip().str.lower().isin([g.lower() for g in grupos_serv])]
                             with st.container(height=500):
                                 if not outros_serv.empty:
                                     for index, linha in outros_serv.iterrows(): desenhar_card_produto(index, linha)
@@ -1565,14 +1554,14 @@ def tela_principal():
                         for i, nome in enumerate(grupos_prod):
                             with sub_abas_prod[i]: preencher_aba_grupo(df_catalogo, nome)
                         with sub_abas_prod[-1]:
-                            outros_prod = df_catalogo[~df_catalogo['Categoria_Receita'].fillna("").astype(str).str.lower().str.contains("mensal|loca|servi|seguro|obra|instala") & ~df_catalogo['Grupo_Itens'].fillna("").astype(str).str.strip().str.lower().isin([g.lower() for g in grupos_prod])]
+                            outros_prod = df_catalogo[~df_catalogo['categoria_receita'].fillna("").astype(str).str.lower().str.contains("mensal|loca|servi|seguro|obra|instala") & ~df_catalogo['grupo_itens'].fillna("").astype(str).str.strip().str.lower().isin([g.lower() for g in grupos_prod])]
                             with st.container(height=500):
                                 if not outros_prod.empty:
                                     for index, linha in outros_prod.iterrows(): desenhar_card_produto(index, linha)
 
                     with aba_mao_obra:
                         st.write("#### 🔹 Instalação e Configuração")
-                        itens_mo = df_catalogo[df_catalogo['Categoria_Receita'].fillna("").astype(str).str.lower().str.contains("obra|instala")]
+                        itens_mo = df_catalogo[df_catalogo['categoria_receita'].fillna("").astype(str).str.lower().str.contains("obra|instala")]
                         with st.container(height=500):
                             if not itens_mo.empty:
                                 for index, linha in itens_mo.iterrows(): desenhar_card_produto(index, linha)
@@ -1587,14 +1576,14 @@ def tela_principal():
                     v_u = item['preco_venda'] if item['preco_venda'] > 0 else item['preco_mrr']
                     
                     if unidade_selecionada and ("obra" in cat_limpa or "instala" in cat_limpa) and not df_valor_ponto.empty:
-                        match_mo_card = df_valor_ponto[(df_valor_ponto['Unidade'].astype(str).str.strip() == unidade_selecionada) & (df_valor_ponto['Nome_Item'].astype(str).str.strip() == nome_item_limpo)]
+                        match_mo_card = df_valor_ponto[(df_valor_ponto['unidade'].astype(str).str.strip() == unidade_selecionada) & (df_valor_ponto['nome_item'].astype(str).str.strip() == nome_item_limpo)]
                         if not match_mo_card.empty:
-                            v_u = converter_para_numero(match_mo_card.iloc[0]['Valor_MO'])
-                            if str(match_mo_card.iloc[0].get('Codigo', '')).strip() and str(match_mo_card.iloc[0].get('Codigo', '')).strip() != 'nan': item['codigo'] = str(match_mo_card.iloc[0].get('Codigo', '')).strip()
+                            v_u = converter_para_numero(match_mo_card.iloc[0]['valor_mo'])
+                            if str(match_mo_card.iloc[0].get('codigo', '')).strip() and str(match_mo_card.iloc[0].get('codigo', '')).strip() != 'nan': item['codigo'] = str(match_mo_card.iloc[0].get('codigo', '')).strip()
                             
                     if cod_item in ['254000000042', '254000000377', '25400000042', '25400000377'] and not df_valor_sensor.empty:
-                        match = df_valor_sensor[(df_valor_sensor['Codigo_Servico'].astype(str).str.strip().str.lstrip('0') == cod_item) & (pd.to_numeric(df_valor_sensor['Sensor_Abertura'], errors='coerce') == qtd_abertura) & (pd.to_numeric(df_valor_sensor['Sensor_IVP'], errors='coerce') == qtd_ivp)]
-                        if not match.empty: v_u = converter_para_numero(match.iloc[0]['Preco'])
+                        match = df_valor_sensor[(df_valor_sensor['codigo_servico'].astype(str).str.strip().str.lstrip('0') == cod_item) & (pd.to_numeric(df_valor_sensor['sensor_abertura'], errors='coerce') == qtd_abertura) & (pd.to_numeric(df_valor_sensor['sensor_ivp'], errors='coerce') == qtd_ivp)]
+                        if not match.empty: v_u = converter_para_numero(match.iloc[0]['preco'])
                     
                     item['preco_calculado'] = v_u 
                     if "obra" in cat_limpa or "instala" in cat_limpa: total_mao_obra += (v_u * item['quantidade'])
@@ -1760,7 +1749,7 @@ def tela_principal():
                     if sucesso:
                         if status_escolhido == "Aprovada":
                             df_us = carregar_usuarios()
-                            df_us['Email_C'] = df_us['Email'].astype(str).str.strip().str.lower()
+                            df_us['email_c'] = df_us['email'].astype(str).str.strip().str.lower()
                             emails_destino = obter_emails_gestores(df_us, st.session_state['unidade_usuario'], st.session_state['vertical_usuario'])
                             if emails_destino:
                                 eqp_fmt = f"R$ {(bruto_produtos * (1 - (val_desc_p/100))):,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
