@@ -32,19 +32,19 @@ def tela_login():
                     if st.button("Entrar", type="primary", use_container_width=True):
                         if email and senha:
                             df_users = carregar_usuarios()
-                            df_users['Email_C'] = df_users['Email'].astype(str).str.strip().str.lower()
-                            match = df_users[(df_users['Email_C'] == email.strip().lower()) & (df_users['Senha'].astype(str) == str(senha))]
+                            df_users['email_c'] = df_users['email'].astype(str).str.strip().str.lower()
+                            match = df_users[(df_users['email_c'] == email.strip().lower()) & (df_users['senha'].astype(str) == str(senha))]
                             
                             if not match.empty:
                                 user = match.iloc[0]
                                 st.session_state.update({
                                     "autenticado": True,
-                                    "nome_usuario": user['Nome'],
-                                    "email_usuario": user['Email_C'],
-                                    "perfil_usuario": str(user['Perfil']).strip(),
-                                    "unidade_usuario": str(user['Unidade']).strip(),
-                                    "vertical_usuario": str(user.get('Vertical', '')).strip(),
-                                    "precisa_trocar_senha": str(user.get('Trocar_Senha', 'Nao')).strip().upper() == 'SIM'
+                                    "nome_usuario": user['nome'],
+                                    "email_usuario": user['email_c'],
+                                    "perfil_usuario": str(user['perfil']).strip(),
+                                    "unidade_usuario": str(user['unidade']).strip(),
+                                    "vertical_usuario": str(user.get('vertical', '')).strip(),
+                                    "precisa_trocar_senha": str(user.get('trocar_senha', 'Nao')).strip().upper() == 'SIM'
                                 })
                                 st.rerun()
                             else:
@@ -72,11 +72,11 @@ def tela_login():
                     if st.button("Enviar Senha", type="primary", use_container_width=True):
                         if email_rec:
                             df_users = carregar_usuarios()
-                            df_users['Email_C'] = df_users['Email'].astype(str).str.strip().str.lower()
-                            match = df_users[df_users['Email_C'] == email_rec.strip().lower()]
+                            df_users['email_c'] = df_users['email'].astype(str).str.strip().str.lower()
+                            match = df_users[df_users['email_c'] == email_rec.strip().lower()]
                             
                             if not match.empty:
-                                senha_atual = match.iloc[0]['Senha']
+                                senha_atual = match.iloc[0]['senha']
                                 # Aciona o motor do utils.py para disparar o email
                                 if enviar_email_recuperacao_senha(email_rec.strip().lower(), senha_atual):
                                     st.success("✅ Senha enviada! Verifique seu e-mail.")
