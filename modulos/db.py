@@ -315,11 +315,13 @@ def registrar_atividade(email_usuario):
     try:
         fuso_br = datetime.timezone(datetime.timedelta(hours=-3))
         agora_dt = datetime.datetime.now(fuso_br)
-        if 8 <= agora_dt.hour < 18:
-            agora_str = agora_dt.strftime("%d/%m/%Y %H:%M:%S")
-            conectar_banco().table("usuarios").update({"ultimo_acesso": agora_str}).eq("email", email_usuario).execute()
-            return True
-        return False
+        
+        # Formatamos a hora atual
+        agora_str = agora_dt.strftime("%d/%m/%Y %H:%M:%S")
+        
+        # Removemos a trava de horário para gravar a qualquer momento
+        conectar_banco().table("usuarios").update({"ultimo_acesso": agora_str}).eq("email", email_usuario).execute()
+        return True
     except Exception as e:
         return False
 
