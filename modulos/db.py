@@ -17,7 +17,7 @@ def conectar_banco() -> Client:
 @st.cache_data(ttl=300)
 def carregar_produtos():
     try:
-        res = conectar_banco().table("Base_Produtos").select("*").execute()
+        res = conectar_banco().table("base_produtos").select("*").execute()
         if res.data:
             df = pd.DataFrame(res.data)
             df.columns = df.columns.astype(str).str.strip()
@@ -30,21 +30,21 @@ def carregar_produtos():
 @st.cache_data(ttl=300)
 def carregar_valores_sensores():
     try:
-        res = conectar_banco().table("Valor_Sensor").select("*").execute()
+        res = conectar_banco().table("valor_sensor").select("*").execute()
         return pd.DataFrame(res.data) if res.data else pd.DataFrame()
     except: return pd.DataFrame()
 
 @st.cache_data(ttl=300)
 def carregar_valores_ponto_mo():
     try:
-        res = conectar_banco().table("Valor_Ponto").select("*").execute()
+        res = conectar_banco().table("valor_ponto").select("*").execute()
         return pd.DataFrame(res.data) if res.data else pd.DataFrame()
     except: return pd.DataFrame()
 
 @st.cache_data(ttl=300)
 def carregar_regras_validacao():
     try:
-        res = conectar_banco().table("Regras_Validacao").select("*").execute()
+        res = conectar_banco().table("regras_validacao").select("*").execute()
         if res.data:
             df = pd.DataFrame(res.data)
             df.columns = df.columns.astype(str).str.strip()
@@ -63,12 +63,12 @@ def carregar_configuracoes():
         "Temp_Proposta": 5.0, "Temp_Proposta_Varejo": 5.0, "Temp_Proposta_Cond": 5.0, "Temp_Proposta_GC": 5.0
     }
     try:
-        res = conectar_banco().table("Configuracoes").select("*").execute()
+        res = conectar_banco().table("configuracoes").select("*").execute()
         if res.data:
             df_config = pd.DataFrame(res.data)
             for _, linha in df_config.iterrows():
-                param = str(linha.get('Parametro', '')).strip()
-                valor = str(linha.get('Valor', '')).replace("%", "").replace("R$", "").strip()
+                param = str(linha.get('parametro', '')).strip()
+                valor = str(linha.get('valor', '')).replace("%", "").replace("R$", "").strip()
                 if valor != "":
                     if "." in valor and "," in valor: valor = valor.replace(".", "").replace(",", ".")
                     elif "," in valor: valor = valor.replace(",", ".")
@@ -80,7 +80,7 @@ def carregar_configuracoes():
 @st.cache_data(ttl=300)
 def carregar_usuarios():
     try: 
-        res = conectar_banco().table("Usuarios").select("*").execute()
+        res = conectar_banco().table("usuarios").select("*").execute()
         return pd.DataFrame(res.data) if res.data else pd.DataFrame()
     except Exception as e: 
         st.error(f"⚠️ Erro de conexão com o Supabase: {e}")
@@ -89,11 +89,11 @@ def carregar_usuarios():
 @st.cache_data(ttl=300)
 def carregar_todos_leads():
     try:
-        res = conectar_banco().table("Cadastro_Clientes").select("*").execute()
+        res = conectar_banco().table("cadastro_clientes").select("*").execute()
         if res.data:
             df = pd.DataFrame(res.data)
             df.columns = df.columns.astype(str).str.strip()
-            if 'Email_Vendedor' in df.columns: df['Email_Vendedor'] = df['Email_Vendedor'].astype(str).str.strip().str.lower()
+            if 'email_vendedor' in df.columns: df['email_vendedor'] = df['email_vendedor'].astype(str).str.strip().str.lower()
             return df
         return pd.DataFrame()
     except: return pd.DataFrame()
@@ -101,11 +101,11 @@ def carregar_todos_leads():
 @st.cache_data(ttl=300)
 def carregar_todas_propostas():
     try:
-        res = conectar_banco().table("Propostas").select("*").execute()
+        res = conectar_banco().table("propostas").select("*").execute()
         if res.data:
             df = pd.DataFrame(res.data)
             df.columns = df.columns.astype(str).str.strip()
-            if 'Email_Vendedor' in df.columns: df['Email_Vendedor'] = df['Email_Vendedor'].astype(str).str.strip().str.lower()
+            if 'email_vendedor' in df.columns: df['email_vendedor'] = df['email_vendedor'].astype(str).str.strip().str.lower()
             return df
         return pd.DataFrame()
     except Exception as e: 
@@ -114,26 +114,25 @@ def carregar_todas_propostas():
 @st.cache_data(ttl=300)
 def carregar_meus_leads(email):
     df = carregar_todos_leads()
-    return df[df['Email_Vendedor'] == str(email).strip().lower()] if not df.empty and 'Email_Vendedor' in df.columns else pd.DataFrame()
+    return df[df['email_vendedor'] == str(email).strip().lower()] if not df.empty and 'email_vendedor' in df.columns else pd.DataFrame()
 
 @st.cache_data(ttl=300)
 def carregar_minhas_propostas(email):
     df = carregar_todas_propostas()
-    return df[df['Email_Vendedor'] == str(email).strip().lower()] if not df.empty and 'Email_Vendedor' in df.columns else pd.DataFrame()
+    return df[df['email_vendedor'] == str(email).strip().lower()] if not df.empty and 'email_vendedor' in df.columns else pd.DataFrame()
 
 def atualizar_senha_banco(email_usuario, nova_senha):
     try:
-        conectar_banco().table("Usuarios").update({"Senha": nova_senha}).eq("Email", email_usuario).execute()
+        conectar_banco().table("usuarios").update({"senha": nova_senha}).eq("email", email_usuario).execute()
         return True
     except: return False
 
 def obter_id_por_index(tabela, row_index_planilha):
     pandas_index = row_index_planilha - 2
-    df = carregar_todos_leads() if tabela == "Cadastro_Clientes" else carregar_todas_propostas()
+    df = carregar_todos_leads() if tabela == "cadastro_clientes" else carregar_todas_propostas()
     
     col_id = None
     if 'id' in df.columns: col_id = 'id'
-    elif 'ID' in df.columns: col_id = 'ID'
     
     if not col_id:
         st.error(f"❌ **ERRO CRÍTICO:** A tabela `{tabela}` não possui a coluna 'id'.")
@@ -149,23 +148,23 @@ def salvar_lead(ld, vendedor, email):
     try:
         agora = obter_data_hora_brasil()
         dados = {
-            "Data_Cadastro": agora,
-            "Nome_Razao": ld.get("nome", ""),
-            "CPF_CNPJ": ld.get("cpf_cnpj", ""),
-            "Data_Nascimento": ld.get("data_nascimento", ""),
-            "Endereco": ld.get("endereco", ""),
-            "Numero": ld.get("numero", ""),
-            "Cidade": ld.get("cidade", ""),
-            "Estado": ld.get("estado", ""),
-            "Telefone": ld.get("telefone", ""),
-            "Contato": ld.get("contato", ""),
-            "Email_Cliente": ld.get("email_cliente", ""),
-            "Coordenadas_GPS": ld.get("gps", ""),
-            "Nome_Usuario": vendedor,
-            "Email_Vendedor": email,
-            "Data_Atualizacao": ""
+            "data_cadastro": agora,
+            "nome_razao": ld.get("nome", ""),
+            "cpf_cnpj": ld.get("cpf_cnpj", ""),
+            "data_nascimento": ld.get("data_nascimento", ""),
+            "endereco": ld.get("endereco", ""),
+            "numero": ld.get("numero", ""),
+            "cidade": ld.get("cidade", ""),
+            "estado": ld.get("estado", ""),
+            "telefone": ld.get("telefone", ""),
+            "contato": ld.get("contato", ""),
+            "email_cliente": ld.get("email_cliente", ""),
+            "coordenadas_gps": ld.get("gps", ""),
+            "nome_usuario": vendedor,
+            "email_vendedor": email,
+            "data_atualizacao": ""
         }
-        conectar_banco().table("Cadastro_Clientes").insert(dados).execute()
+        conectar_banco().table("cadastro_clientes").insert(dados).execute()
         df = carregar_todos_leads()
         return len(df) + 1 
     except Exception as err:
@@ -174,25 +173,25 @@ def salvar_lead(ld, vendedor, email):
 
 def atualizar_lead(row_index, ld):
     try:
-        db_id = obter_id_por_index("Cadastro_Clientes", row_index)
+        db_id = obter_id_por_index("cadastro_clientes", row_index)
         if not db_id: return False
         
         agora = obter_data_hora_brasil()
         dados = {
-            "Nome_Razao": ld.get("nome", ""),
-            "CPF_CNPJ": ld.get("cpf_cnpj", ""),
-            "Data_Nascimento": ld.get("data_nascimento", ""),
-            "Endereco": ld.get("endereco", ""),
-            "Numero": ld.get("numero", ""),
-            "Cidade": ld.get("cidade", ""),
-            "Estado": ld.get("estado", ""),
-            "Telefone": ld.get("telefone", ""),
-            "Contato": ld.get("contato", ""),
-            "Email_Cliente": ld.get("email_cliente", ""),
-            "Coordenadas_GPS": ld.get("gps", ""),
-            "Data_Atualizacao": agora
+            "nome_razao": ld.get("nome", ""),
+            "cpf_cnpj": ld.get("cpf_cnpj", ""),
+            "data_nascimento": ld.get("data_nascimento", ""),
+            "endereco": ld.get("endereco", ""),
+            "numero": ld.get("numero", ""),
+            "cidade": ld.get("cidade", ""),
+            "estado": ld.get("estado", ""),
+            "telefone": ld.get("telefone", ""),
+            "contato": ld.get("contato", ""),
+            "email_cliente": ld.get("email_cliente", ""),
+            "coordenadas_gps": ld.get("gps", ""),
+            "data_atualizacao": agora
         }
-        conectar_banco().table("Cadastro_Clientes").update(dados).eq("id", db_id).execute()
+        conectar_banco().table("cadastro_clientes").update(dados).eq("id", db_id).execute()
         return True
     except Exception as err:
         st.error(f"❌ Erro ao atualizar Lead no banco: {err}")
@@ -203,27 +202,27 @@ def salvar_proposta(nome_cliente, nome_proposta, vendedor, email, total_mrr, tot
         agora = obter_data_hora_brasil()
         resumo_itens = "; ".join([f"{item['quantidade']}x {item['nome']} [Cód: {item.get('codigo', '-')}] (R$ {item.get('preco_calculado', item.get('preco_venda', 0)):,.2f})" for item in itens])
         dados = {
-            "Data_Proposta": agora,
-            "Nome_Cliente": nome_cliente,
-            "Nome_Usuario": vendedor,
-            "Email_Vendedor": email,
-            "Total_MRR": f"R$ {total_mrr:,.2f}".replace(",", "_").replace(".", ",").replace("_", "."),
-            "Total_Setup": f"R$ {total_setup:,.2f}".replace(",", "_").replace(".", ",").replace("_", "."),
-            "Forma_Pagamento": forma_pag,
-            "Parcelas": f"{parcelas}x",
-            "Valor_Parcela": val_parcela,
-            "Itens_Orcamento": resumo_itens,
-            "Desc_Prod": f"{desc_p:.1f}%",
-            "Desc_Alarme": f"{desc_a:.1f}%",
-            "Desc_Imagem": f"{desc_i:.1f}%",
-            "Status_Proposta": status_prop,
-            "Data_Proposta_Renovada": "",
-            "Motivo_Perda": "",
-            "Nome_Proposta": nome_proposta,
-            "Temperatura": temperatura,
-            "Data_Temperatura_Renovada": agora
+            "data_proposta": agora,
+            "nome_cliente": nome_cliente,
+            "nome_usuario": vendedor,
+            "email_vendedor": email,
+            "total_mrr": f"R$ {total_mrr:,.2f}".replace(",", "_").replace(".", ",").replace("_", "."),
+            "total_setup": f"R$ {total_setup:,.2f}".replace(",", "_").replace(".", ",").replace("_", "."),
+            "forma_pagamento": forma_pag,
+            "parcelas": f"{parcelas}x",
+            "valor_parcela": val_parcela,
+            "itens_orcamento": resumo_itens,
+            "desc_prod": f"{desc_p:.1f}%",
+            "desc_alarme": f"{desc_a:.1f}%",
+            "desc_imagem": f"{desc_i:.1f}%",
+            "status_proposta": status_prop,
+            "data_proposta_renovada": "",
+            "motivo_perda": "",
+            "nome_proposta": nome_proposta,
+            "temperatura": temperatura,
+            "data_temperatura_renovada": agora
         }
-        conectar_banco().table("Propostas").insert(dados).execute()
+        conectar_banco().table("propostas").insert(dados).execute()
         return True
     except Exception as err:
         st.error(f"❌ Erro Supabase ao salvar proposta: {err}")
@@ -231,28 +230,28 @@ def salvar_proposta(nome_cliente, nome_proposta, vendedor, email, total_mrr, tot
 
 def atualizar_proposta_modificada(row_index, nome_proposta, total_mrr, total_setup, forma_pag, parcelas, val_parcela, itens, desc_p, desc_a, desc_i, temperatura, status_prop):
     try:
-        db_id = obter_id_por_index("Propostas", row_index)
+        db_id = obter_id_por_index("propostas", row_index)
         if not db_id: return False
 
         agora = obter_data_hora_brasil()
         resumo_itens = "; ".join([f"{item['quantidade']}x {item['nome']} [Cód: {item.get('codigo', '-')}] (R$ {item.get('preco_calculado', item.get('preco_venda', 0)):,.2f})" for item in itens])
         dados = {
-            "Total_MRR": f"R$ {total_mrr:,.2f}".replace(",", "_").replace(".", ",").replace("_", "."),
-            "Total_Setup": f"R$ {total_setup:,.2f}".replace(",", "_").replace(".", ",").replace("_", "."),
-            "Forma_Pagamento": forma_pag,
-            "Parcelas": f"{parcelas}x",
-            "Valor_Parcela": val_parcela,
-            "Itens_Orcamento": resumo_itens,
-            "Desc_Prod": f"{desc_p:.1f}%",
-            "Desc_Alarme": f"{desc_a:.1f}%",
-            "Desc_Imagem": f"{desc_i:.1f}%",
-            "Status_Proposta": status_prop,
-            "Data_Proposta_Renovada": agora,
-            "Nome_Proposta": nome_proposta,
-            "Temperatura": temperatura,
-            "Data_Temperatura_Renovada": agora
+            "total_mrr": f"R$ {total_mrr:,.2f}".replace(",", "_").replace(".", ",").replace("_", "."),
+            "total_setup": f"R$ {total_setup:,.2f}".replace(",", "_").replace(".", ",").replace("_", "."),
+            "forma_pagamento": forma_pag,
+            "parcelas": f"{parcelas}x",
+            "valor_parcela": val_parcela,
+            "itens_orcamento": resumo_itens,
+            "desc_prod": f"{desc_p:.1f}%",
+            "desc_alarme": f"{desc_a:.1f}%",
+            "desc_imagem": f"{desc_i:.1f}%",
+            "status_proposta": status_prop,
+            "data_proposta_renovada": agora,
+            "nome_proposta": nome_proposta,
+            "temperatura": temperatura,
+            "data_temperatura_renovada": agora
         }
-        conectar_banco().table("Propostas").update(dados).eq("id", db_id).execute()
+        conectar_banco().table("propostas").update(dados).eq("id", db_id).execute()
         return True
     except Exception as err:
         st.error(f"❌ Erro Supabase ao atualizar proposta: {err}")
@@ -260,19 +259,19 @@ def atualizar_proposta_modificada(row_index, nome_proposta, total_mrr, total_set
 
 def efetivar_renovacao(row_index_planilha, novo_mrr, novo_setup, nova_temp):
     try:
-        db_id = obter_id_por_index("Propostas", row_index_planilha)
+        db_id = obter_id_por_index("propostas", row_index_planilha)
         if not db_id: return False
 
         agora = obter_data_hora_brasil()
         dados = {
-            "Total_MRR": novo_mrr,
-            "Total_Setup": novo_setup,
-            "Status_Proposta": "Em Negociação",
-            "Data_Proposta_Renovada": agora,
-            "Temperatura": nova_temp,
-            "Data_Temperatura_Renovada": agora
+            "total_mrr": novo_mrr,
+            "total_setup": novo_setup,
+            "status_proposta": "Em Negociação",
+            "data_proposta_renovada": agora,
+            "temperatura": nova_temp,
+            "data_temperatura_renovada": agora
         }
-        conectar_banco().table("Propostas").update(dados).eq("id", db_id).execute()
+        conectar_banco().table("propostas").update(dados).eq("id", db_id).execute()
         return True
     except Exception as err:
         st.error(f"❌ Erro Supabase ao renovar proposta: {err}")
@@ -280,11 +279,11 @@ def efetivar_renovacao(row_index_planilha, novo_mrr, novo_setup, nova_temp):
 
 def efetivar_atualizacao_temperatura(row_index_planilha, nova_temp):
     try:
-        db_id = obter_id_por_index("Propostas", row_index_planilha)
+        db_id = obter_id_por_index("propostas", row_index_planilha)
         if not db_id: return False
 
         agora = obter_data_hora_brasil()
-        conectar_banco().table("Propostas").update({"Temperatura": nova_temp, "Data_Temperatura_Renovada": agora}).eq("id", db_id).execute()
+        conectar_banco().table("propostas").update({"temperatura": nova_temp, "data_temperatura_renovada": agora}).eq("id", db_id).execute()
         return True
     except Exception as err:
         st.error(f"❌ Erro Supabase ao atualizar temperatura: {err}")
@@ -292,10 +291,10 @@ def efetivar_atualizacao_temperatura(row_index_planilha, nova_temp):
 
 def efetivar_perda(row_index_planilha, motivo):
     try:
-        db_id = obter_id_por_index("Propostas", row_index_planilha)
+        db_id = obter_id_por_index("propostas", row_index_planilha)
         if not db_id: return False
 
-        conectar_banco().table("Propostas").update({"Status_Proposta": "Perdida", "Motivo_Perda": motivo}).eq("id", db_id).execute()
+        conectar_banco().table("propostas").update({"status_proposta": "Perdida", "motivo_perda": motivo}).eq("id", db_id).execute()
         return True
     except Exception as err:
         st.error(f"❌ Erro Supabase ao efetivar perda: {err}")
@@ -303,10 +302,10 @@ def efetivar_perda(row_index_planilha, motivo):
 
 def efetivar_aprovacao(row_index_planilha):
     try:
-        db_id = obter_id_por_index("Propostas", row_index_planilha)
+        db_id = obter_id_por_index("propostas", row_index_planilha)
         if not db_id: return False
 
-        conectar_banco().table("Propostas").update({"Status_Proposta": "Aprovada", "Motivo_Perda": ""}).eq("id", db_id).execute()
+        conectar_banco().table("propostas").update({"status_proposta": "Aprovada", "motivo_perda": ""}).eq("id", db_id).execute()
         return True
     except Exception as err:
         st.error(f"❌ Erro Supabase ao aprovar proposta: {err}")
@@ -318,7 +317,7 @@ def registrar_atividade(email_usuario):
         agora_dt = datetime.datetime.now(fuso_br)
         if 8 <= agora_dt.hour < 18:
             agora_str = agora_dt.strftime("%d/%m/%Y %H:%M:%S")
-            conectar_banco().table("Usuarios").update({"Ultimo_Acesso": agora_str}).eq("Email", email_usuario).execute()
+            conectar_banco().table("usuarios").update({"ultimo_acesso": agora_str}).eq("email", email_usuario).execute()
             return True
         return False
     except Exception as e:
@@ -327,10 +326,8 @@ def registrar_atividade(email_usuario):
 @st.cache_data(ttl=60)
 def carregar_tabela_configuracoes():
     try:
-        res = conectar_banco().table("Configuracoes").select("*").execute()
+        res = conectar_banco().table("configuracoes").select("*").execute()
         if res.data: return pd.DataFrame(res.data)
-        res_acento = conectar_banco().table("Configurações").select("*").execute()
-        if res_acento.data: return pd.DataFrame(res_acento.data)
         return pd.DataFrame()
     except Exception as e:
         st.error(f"🚨 Erro ao buscar tabela no Supabase: {e}")
@@ -338,7 +335,7 @@ def carregar_tabela_configuracoes():
 
 def atualizar_valor_configuracao(parametro, novo_valor):
     try:
-        conectar_banco().table("Configuracoes").update({"Valor": str(novo_valor)}).eq("Parametro", parametro).execute()
+        conectar_banco().table("configuracoes").update({"valor": str(novo_valor)}).eq("parametro", parametro).execute()
         return True
     except Exception as e:
         st.error(f"Erro ao atualizar {parametro}: {e}")
@@ -347,19 +344,17 @@ def atualizar_valor_configuracao(parametro, novo_valor):
 # --- NOVAS FUNÇÕES DE GESTÃO DE USUÁRIOS ---
 def adicionar_usuario_banco(dados):
     try:
-        conectar_banco().table("Usuarios").insert(dados).execute()
+        conectar_banco().table("usuarios").insert(dados).execute()
         return True, "Usuário adicionado com sucesso!"
     except Exception as e:
         return False, f"Erro Supabase: {e}"
 
 def atualizar_usuario_banco(id_usuario, email_original, dados):
     try:
-        # Tenta atualizar com segurança máxima pelo ID único da linha
         if id_usuario and str(id_usuario).lower() != 'nan':
-            conectar_banco().table("Usuarios").update(dados).eq("id", int(id_usuario)).execute()
-        # Fallback de segurança: se a tabela não tiver ID, usa o e-mail
+            conectar_banco().table("usuarios").update(dados).eq("id", int(id_usuario)).execute()
         else:
-            conectar_banco().table("Usuarios").update(dados).eq("Email", email_original).execute()
+            conectar_banco().table("usuarios").update(dados).eq("email", email_original).execute()
         return True, "Usuário atualizado com sucesso!"
     except Exception as e:
         return False, f"Erro Supabase: {e}"
