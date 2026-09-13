@@ -94,10 +94,10 @@ def validar_inconsistencias_carrinho(carrinho, df_regras):
     if df_regras.empty or not carrinho: return avisos
     codigos_no_carrinho = [str(item.get('codigo', '')).strip().lstrip('0') for item in carrinho]
     for _, regra in df_regras.iterrows():
-        gatilho = str(regra.get('Item_Gatilho', '')).strip().lstrip('0')
-        exigidos_str = str(regra.get('Itens_Exigidos', '')).strip()
-        msg = str(regra.get('Mensagem_Aviso', 'Inconsistência detectada.'))
-        tipo_regra = str(regra.get('Tipo_Regra', 'Exigencia')).strip().lower()
+        gatilho = str(regra.get('item_gatilho', '')).strip().lstrip('0')
+        exigidos_str = str(regra.get('itens_exigidos', '')).strip()
+        msg = str(regra.get('mensagem_aviso', 'Inconsistência detectada.'))
+        tipo_regra = str(regra.get('tipo_regra', 'Exigencia')).strip().lower()
         if gatilho in codigos_no_carrinho:
             itens_relacionados = [c.strip().lstrip('0') for c in exigidos_str.split(';') if c.strip()]
             if 'exig' in tipo_regra:
@@ -107,8 +107,8 @@ def validar_inconsistencias_carrinho(carrinho, df_regras):
     return avisos
 
 def obter_detalhes_split(row_data, df_produtos, df_valor_sensor, df_valor_ponto, unidade_selecionada):
-    itens_str = str(row_data.get('Itens_Orcamento', ''))
-    desc_p, desc_a, desc_i = converter_para_numero(row_data.get('Desc_Prod', '0')) / 100, converter_para_numero(row_data.get('Desc_Alarme', '0')) / 100, converter_para_numero(row_data.get('Desc_Imagem', '0')) / 100
+    itens_str = str(row_data.get('itens_orcamento', ''))
+    desc_p, desc_a, desc_i = converter_para_numero(row_data.get('desc_prod', '0')) / 100, converter_para_numero(row_data.get('desc_alarme', '0')) / 100, converter_para_numero(row_data.get('desc_imagem', '0')) / 100
     bruto_prod, bruto_alarme, bruto_imagem, mao_obra = 0.0, 0.0, 0.0, 0.0
     itens_parsed, qtd_abertura, qtd_ivp = [], 0, 0
     
@@ -118,27 +118,27 @@ def obter_detalhes_split(row_data, df_produtos, df_valor_sensor, df_valor_ponto,
                 qtd = int(item.strip().split("x ", 1)[0])
                 nome_item = item.strip().split("x ", 1)[1].split("[Cód:")[0].strip() if "[Cód:" in item else item.strip().split("x ", 1)[1].strip()
             except: qtd, nome_item = 0, ""
-            prod_info = df_produtos[df_produtos['Nome_Item'].astype(str).str.strip() == nome_item]
+            prod_info = df_produtos[df_produtos['nome_item'].astype(str).str.strip() == nome_item]
             if not prod_info.empty:
                 prod = prod_info.iloc[0]
-                ts = str(prod.get('Tipo_Sensor', '')).strip().upper()
+                ts = str(prod.get('tipo_sensor', '')).strip().upper()
                 if ts == 'ABERTURA': qtd_abertura += qtd
                 elif ts == 'IVP': qtd_ivp += qtd
                 itens_parsed.append({'qtd': qtd, 'prod': prod})
                 
     for it in itens_parsed:
         qtd, prod = it['qtd'], it['prod']
-        cat, grupo, cod_item = str(prod.get('Categoria_Receita', '')).strip().lower(), str(prod.get('Grupo_Itens', '')).strip().lower(), str(prod.get('Codigo_KME', '')).strip().lstrip('0')
-        v_u = converter_para_numero(prod.get('Preco_Venda', 0)) if converter_para_numero(prod.get('Preco_Venda', 0)) > 0 else converter_para_numero(prod.get('Preco_LOC_36', 0))
+        cat, grupo, cod_item = str(prod.get('categoria_receita', '')).strip().lower(), str(prod.get('grupo_itens', '')).strip().lower(), str(prod.get('codigo_kme', '')).strip().lstrip('0')
+        v_u = converter_para_numero(prod.get('preco_venda', 0)) if converter_para_numero(prod.get('preco_venda', 0)) > 0 else converter_para_numero(prod.get('preco_loc_36', 0))
         
         if ("obra" in cat or "instala" in cat) and not df_valor_ponto.empty:
-            match_mo = df_valor_ponto[(df_valor_ponto['Unidade'].astype(str).str.strip() == unidade_selecionada) & (df_valor_ponto['Nome_Item'].astype(str).str.strip() == str(prod.get('Nome_Item', '')).strip())]
-            if not match_mo.empty: v_u = converter_para_numero(match_mo.iloc[0]['Valor_MO'])
+            match_mo = df_valor_ponto[(df_valor_ponto['unidade'].astype(str).str.strip() == unidade_selecionada) & (df_valor_ponto['nome_item'].astype(str).str.strip() == str(prod.get('nome_item', '')).strip())]
+            if not match_mo.empty: v_u = converter_para_numero(match_mo.iloc[0]['valor_mo'])
             
         if cod_item in ['254000000042', '254000000377', '25400000042', '25400000377']:
             if not df_valor_sensor.empty:
-                match = df_valor_sensor[(df_valor_sensor['Codigo_Servico'].astype(str).str.strip().str.lstrip('0') == cod_item) & (pd.to_numeric(df_valor_sensor['Sensor_Abertura'], errors='coerce') == qtd_abertura) & (pd.to_numeric(df_valor_sensor['Sensor_IVP'], errors='coerce') == qtd_ivp)]
-                if not match.empty: v_u = converter_para_numero(match.iloc[0]['Preco'])
+                match = df_valor_sensor[(df_valor_sensor['codigo_servico'].astype(str).str.strip().str.lstrip('0') == cod_item) & (pd.to_numeric(df_valor_sensor['sensor_abertura'], errors='coerce') == qtd_abertura) & (pd.to_numeric(df_valor_sensor['sensor_ivp'], errors='coerce') == qtd_ivp)]
+                if not match.empty: v_u = converter_para_numero(match.iloc[0]['preco'])
                     
         if "obra" in cat or "instala" in cat: mao_obra += (v_u * qtd)
         elif "produto" in cat or "equipamento" in cat: bruto_prod += (v_u * qtd)
@@ -156,8 +156,8 @@ def obter_detalhes_split(row_data, df_produtos, df_valor_sensor, df_valor_ponto,
     return mrr_fmt, eqp_fmt, mo_fmt
 
 def calcular_novos_valores_proposta(row_data, df_produtos, df_valor_sensor):
-    itens_str = str(row_data.get('Itens_Orcamento', ''))
-    desc_p, desc_a, desc_i = converter_para_numero(row_data.get('Desc_Prod', '0')) / 100, converter_para_numero(row_data.get('Desc_Alarme', '0')) / 100, converter_para_numero(row_data.get('Desc_Imagem', '0')) / 100
+    itens_str = str(row_data.get('itens_orcamento', ''))
+    desc_p, desc_a, desc_i = converter_para_numero(row_data.get('desc_prod', '0')) / 100, converter_para_numero(row_data.get('desc_alarme', '0')) / 100, converter_para_numero(row_data.get('desc_imagem', '0')) / 100
     bruto_prod, bruto_alarme, bruto_imagem, mao_obra = 0.0, 0.0, 0.0, 0.0
     itens_parsed, qtd_abertura, qtd_ivp = [], 0, 0
     
@@ -167,29 +167,29 @@ def calcular_novos_valores_proposta(row_data, df_produtos, df_valor_sensor):
                 qtd = int(item.strip().split("x ", 1)[0])
                 nome_item = item.strip().split("x ", 1)[1].split("[Cód:")[0].strip() if "[Cód:" in item else item.strip().split("x ", 1)[1].strip()
             except: qtd, nome_item = 0, ""
-            prod_info = df_produtos[df_produtos['Nome_Item'].astype(str).str.strip() == nome_item]
+            prod_info = df_produtos[df_produtos['nome_item'].astype(str).str.strip() == nome_item]
             if not prod_info.empty:
                 prod = prod_info.iloc[0]
-                ts = str(prod.get('Tipo_Sensor', '')).strip().upper()
+                ts = str(prod.get('tipo_sensor', '')).strip().upper()
                 if ts == 'ABERTURA': qtd_abertura += qtd
                 elif ts == 'IVP': qtd_ivp += qtd
                 itens_parsed.append({'qtd': qtd, 'prod': prod})
                 
     for it in itens_parsed:
         qtd, prod = it['qtd'], it['prod']
-        cat, grupo, cod_item = str(prod.get('Categoria_Receita', '')).strip().lower(), str(prod.get('Grupo_Itens', '')).strip().lower(), str(prod.get('Codigo_KME', '')).strip().lstrip('0')
-        v_u = converter_para_numero(prod.get('Preco_Venda', 0)) if converter_para_numero(prod.get('Preco_Venda', 0)) > 0 else converter_para_numero(prod.get('Preco_LOC_36', 0))
+        cat, grupo, cod_item = str(prod.get('categoria_receita', '')).strip().lower(), str(prod.get('grupo_itens', '')).strip().lower(), str(prod.get('codigo_kme', '')).strip().lstrip('0')
+        v_u = converter_para_numero(prod.get('preco_venda', 0)) if converter_para_numero(prod.get('preco_venda', 0)) > 0 else converter_para_numero(prod.get('preco_loc_36', 0))
         
         if cod_item in ['254000000042', '254000000377', '25400000042', '25400000377']:
             if not df_valor_sensor.empty:
-                match = df_valor_sensor[(df_valor_sensor['Codigo_Servico'].astype(str).str.strip().str.lstrip('0') == cod_item) & (pd.to_numeric(df_valor_sensor['Sensor_Abertura'], errors='coerce') == qtd_abertura) & (pd.to_numeric(df_valor_sensor['Sensor_IVP'], errors='coerce') == qtd_ivp)]
-                if not match.empty: v_u = converter_para_numero(match.iloc[0]['Preco'])
+                match = df_valor_sensor[(df_valor_sensor['codigo_servico'].astype(str).str.strip().str.lstrip('0') == cod_item) & (pd.to_numeric(df_valor_sensor['sensor_abertura'], errors='coerce') == qtd_abertura) & (pd.to_numeric(df_valor_sensor['sensor_ivp'], errors='coerce') == qtd_ivp)]
+                if not match.empty: v_u = converter_para_numero(match.iloc[0]['preco'])
                     
         if "obra" in cat or "instala" in cat: mao_obra += (v_u * qtd)
         elif "produto" in cat or "equipamento" in cat: bruto_prod += (v_u * qtd)
         else:
             if "imagem" in grupo: bruto_imagem += (v_u * qtd)
-            else: bruto_alarme += (v_u * qtd)  # <--- O ERRO ESTAVA AQUI! Foi corrigido para `qtd`.
+            else: bruto_alarme += (v_u * qtd) 
             
     novo_total_mrr, novo_total_setup = (bruto_alarme * (1 - desc_a)) + (bruto_imagem * (1 - desc_i)), (bruto_prod * (1 - desc_p)) + mao_obra
     return f"R$ {novo_total_mrr:,.2f}".replace(",", "_").replace(".", ",").replace("_", "."), f"R$ {novo_total_setup:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
@@ -199,18 +199,18 @@ def obter_emails_gestores(df_users, unidade_user, vertical_user):
     
     # 1. Busca Líderes e Gerentes da MESMA Unidade do vendedor
     gestores_unidade = df_users[
-        (df_users['Perfil'].astype(str).str.strip().isin(['Lider', 'Gerente_Unidade'])) & 
-        (df_users['Unidade'].astype(str).str.strip().str.lower() == str(unidade_user).strip().lower())
+        (df_users['perfil'].astype(str).str.strip().isin(['Lider', 'Gerente_Unidade'])) & 
+        (df_users['unidade'].astype(str).str.strip().str.lower() == str(unidade_user).strip().lower())
     ]
-    emails.extend(gestores_unidade['Email_C'].tolist())
+    emails.extend(gestores_unidade['email_c'].tolist())
     
     # 2. Busca o Gerente Nacional da Vertical (Varejo ou Condomínio)
     if "varejo" in str(vertical_user).lower():
-        gerentes_v = df_users[df_users['Perfil'].astype(str).str.strip() == 'Gerente_Varejo']
-        emails.extend(gerentes_v['Email_C'].tolist())
+        gerentes_v = df_users[df_users['perfil'].astype(str).str.strip() == 'Gerente_Varejo']
+        emails.extend(gerentes_v['email_c'].tolist())
     elif "condominio" in str(vertical_user).lower():
-        gerentes_v = df_users[df_users['Perfil'].astype(str).str.strip() == 'Gerente_Condominio']
-        emails.extend(gerentes_v['Email_C'].tolist())
+        gerentes_v = df_users[df_users['perfil'].astype(str).str.strip() == 'Gerente_Condominio']
+        emails.extend(gerentes_v['email_c'].tolist())
         
     # O 'set' no final garante que, se alguém tiver dois cargos, não receba o e-mail duplicado
     return list(set(emails))
