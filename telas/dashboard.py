@@ -455,10 +455,10 @@ def tela_principal():
                         with st.form("form_edit_user"):
                             c1, c2 = st.columns(2)
                             ed_nome = c1.text_input("Nome Completo *", value=str(user_data.get('nome', '')).replace('nan',''))
-                            ed_email = c2.text_input("E-mail (Login) *", value=email_original)
+                            ed_email = c2.text_input("E-mail (Login) *", value=email_original, disabled=True, help="Para trocar o e-mail de login, inative este usuário e cadastre um novo.")
                             
                             c3, c4 = st.columns(2)
-                            ed_senha = c3.text_input("Senha *", value=str(user_data.get('senha', '')).replace('nan',''))
+                            c3.text_input("Senha", value="••••••••", disabled=True,help="Gerenciada pelo Supabase Auth. Use o botão de reset abaixo.")
                             
                             opcoes_status = ["Ativo", "Inativo"]
                             idx_status = opcoes_status.index(user_data.get('status', 'Ativo')) if user_data.get('status', 'Ativo') in opcoes_status else 0
@@ -481,13 +481,12 @@ def tela_principal():
                             ed_perfil_acesso = c9.selectbox("Perfil de Acesso (App)", opcoes_acc, index=idx_acc)
                             
                             if st.form_submit_button("💾 Salvar Alterações", type="primary"):
-                                if not ed_nome or not ed_email or not ed_senha:
+                                if not ed_nome or not ed_email:
                                     st.error("⚠️ Nome, E-mail e Senha são campos obrigatórios!")
                                 else:
                                     dados_update = {
                                         "nome": ed_nome, 
                                         "email": str(ed_email).lower().strip(), 
-                                        "senha": ed_senha, 
                                         "perfil": ed_perfil, 
                                         "unidade": ed_unidade,
                                         "vertical": ed_vertical, 
@@ -502,6 +501,11 @@ def tela_principal():
                                         st.rerun()
                                     else:
                                         st.error(msg)
+                        st.write("")
+                        if st.button("🔑 Enviar senha temporária", key=f"reset_{id_usuario}"):
+                          from modulos.auth import resetar_senha_como_admin
+                          ok, msg = resetar_senha_como_admin(email_original)
+                          (st.success if ok else st.error)(msg)
 
 
     elif st.session_state["etapa_atual"] == "dashboard":
