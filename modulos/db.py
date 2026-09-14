@@ -1,7 +1,8 @@
 import streamlit as st
 import pandas as pd
-from supabase import create_client, Client
 import datetime
+
+from modulos.auth import cliente_sessao, conectar_admin, criar_usuario_auth
 
 # ============================================================
 # KHRONOS SALES - modulos/db.py  (versao multiempresa)
@@ -22,6 +23,15 @@ import datetime
 #
 # As assinaturas publicas continuam identicas: o dashboard.py nao
 # precisa de nenhuma alteracao.
+#
+# FRENTE 2 (Auth + RLS Fase B):
+#  6. conectar_banco() deixou de ser um cliente global em cache_resource
+#     e passou a ser o cliente da sessao, com o JWT do usuario. A RLS do
+#     banco agora filtra por empresa sozinha, independente do codigo.
+#  7. Escrita na tabela usuarios passou para o cliente service_role
+#     (conectar_admin), que ignora RLS. O filtro por empresa_id continua
+#     explicito nessas chamadas.
+#  8. Senha saiu do banco. Quem guarda e valida e o Supabase Auth.
 # ============================================================
 
 
@@ -31,11 +41,9 @@ def obter_data_hora_brasil():
     return datetime.datetime.now(fuso_br).strftime("%d/%m/%Y %H:%M:%S")
 
 
-@st.cache_resource
-def conectar_banco() -> Client:
-    url = st.secrets["supabase"]["url"]
-    key = st.secrets["supabase"]["key"]
-    return create_client(url, key)
+def conectar_banco():
+    """Cliente da sessao atual, autenticado como o usuario logado."""
+    return cliente_sessao()
 
 
 # ============================================================
@@ -188,21 +196,19 @@ def atualizar_valor_configuracao(parametro, novo_valor):
 # ============================================================
 # USUARIOS
 # ============================================================
-def buscar_usuario_para_login(email):
+def carregar_perfil_logado(email):
     """
-    Busca cross-tenant, usada APENAS na tela de login: nesse momento
-    ainda nao sabemos a qual empresa o usuario pertence. Retorna um
-    dict com os dados do usuario (incluindo empresa_id) ou None.
+    Chamada logo APOS o login no Supabase Auth, para descobrir empresa,
+    perfil e unidade. Usa o cliente da sessao: o proprio JWT ja garante
+    que so a linha dele (e a dos colegas de empresa) esta visivel.
+    Nao existe mais busca cross-tenant por senha.
     """
     try:
         alvo = str(email).strip().lower()
-        res = conectar_banco().table("usuarios").select("*").execute()
-        for u in (res.data or []):
-            if str(u.get("email", "")).strip().lower() == alvo:
-                return u
-        return None
+        res = conectar_banco().table("usuarios").select("*").eq("email", alvo).limit(1).execute()
+        return res.data[0] if res.data else None
     except Exception as e:
-        st.error(f"⚠️ Erro de conexão com o Supabase: {e}")
+        st.error(f"⚠️ Erro ao carregar perfil: {e}")
         return None
 
 
@@ -220,11 +226,34 @@ def carregar_usuarios():
 
 
 def adicionar_usuario_banco(dados):
+    """
+    Cria o usuario no Supabase Auth e na tabela usuarios, na mesma operacao.
+    'dados' pode trazer 'senha': ela vai apenas para o Auth, nunca para a tabela.
+    """
     try:
+        eid = _exigir_empresa()
         dados = dict(dados)
-        dados["empresa_id"] = _exigir_empresa()
-        conectar_banco().table("usuarios").insert(dados).execute()
-        return True, "Usuário adicionado com sucesso!"
+        email = str(dados.get("email", "")).strip().lower()
+        senha_inicial = str(dados.pop("senha", "")).strip()
+
+        if not email or "@" not in email:
+            return False, "Informe um e-mail válido."
+        if len(senha_inicial) < 8:
+            return False, "A senha inicial precisa ter ao menos 8 caracteres."
+
+        auth_id, erro = criar_usuario_auth(email, senha_inicial, dados.get("nome", ""))
+        if erro:
+            return False, erro
+
+        dados.update({
+            "email": email,
+            "empresa_id": eid,
+            "auth_user_id": auth_id,
+            "trocar_senha": "Sim"
+        })
+        conectar_admin().table("usuarios").insert(dados).execute()
+        st.cache_data.clear()
+        return True, "Usuário adicionado. Ele definirá a senha no primeiro acesso."
     except Exception as e:
         return False, f"Erro Supabase: {e}"
 
@@ -233,22 +262,27 @@ def atualizar_usuario_banco(id_usuario, email_original, dados):
     try:
         eid = _exigir_empresa()
         dados = dict(dados)
-        dados.pop("empresa_id", None)  # nunca deixa mover usuario de empresa pela tela
-        tab = conectar_banco().table("usuarios")
+        # nada disso pode ser alterado pela tela de gestao
+        for campo in ("empresa_id", "auth_user_id", "senha", "email"):
+            dados.pop(campo, None)
+
+        tab = conectar_admin().table("usuarios")
         if id_usuario and str(id_usuario).lower() != 'nan':
             tab.update(dados).eq("id", int(id_usuario)).eq("empresa_id", eid).execute()
         else:
             tab.update(dados).eq("email", email_original).eq("empresa_id", eid).execute()
+        st.cache_data.clear()
         return True, "Usuário atualizado com sucesso!"
     except Exception as e:
         return False, f"Erro Supabase: {e}"
 
 
-def atualizar_senha_banco(email_usuario, nova_senha):
+def marcar_senha_trocada(email_usuario):
+    """Chamada depois que o proprio usuario define a senha nova no Auth."""
     try:
         eid = empresa_atual()
-        q = conectar_banco().table("usuarios").update({"senha": nova_senha, "trocar_senha": "Nao"}) \
-            .eq("email", email_usuario)
+        q = conectar_admin().table("usuarios").update({"trocar_senha": "Nao"}) \
+            .eq("email", str(email_usuario).strip().lower())
         if eid:
             q = q.eq("empresa_id", eid)
         q.execute()
@@ -262,7 +296,8 @@ def registrar_atividade(email_usuario):
         fuso_br = datetime.timezone(datetime.timedelta(hours=-3))
         agora_str = datetime.datetime.now(fuso_br).strftime("%d/%m/%Y %H:%M:%S")
         eid = empresa_atual()
-        q = conectar_banco().table("usuarios").update({"ultimo_acesso": agora_str}).eq("email", email_usuario)
+        q = conectar_admin().table("usuarios").update({"ultimo_acesso": agora_str}) \
+            .eq("email", str(email_usuario).strip().lower())
         if eid:
             q = q.eq("empresa_id", eid)
         q.execute()
